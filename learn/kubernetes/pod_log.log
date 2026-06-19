@@ -1,0 +1,304 @@
+root@ubuntu-mass:~# kubectl -n gpu-operator logs nvidia-driver-daemonset-5lk9f
++ RUN_DIR=/run/nvidia
++ PID_FILE=/run/nvidia/nvidia-driver.pid
++ DRIVER_VERSION=580.126.20
++ KERNEL_UPDATE_HOOK=/run/kernel/postinst.d/update-nvidia-driver
++ NUM_VGPU_DEVICES=0
++ GPU_DIRECT_RDMA_ENABLED=false
++ USE_HOST_MOFED=false
++ NVIDIA_MODULE_PARAMS=()
++ NVIDIA_UVM_MODULE_PARAMS=()
++ NVIDIA_MODESET_MODULE_PARAMS=()
++ NVIDIA_PEERMEM_MODULE_PARAMS=()
++ TARGETARCH=amd64
++ OPEN_KERNEL_MODULES_ENABLED=false
++ [[ false == \t\r\u\e ]]
++ KERNEL_TYPE=kernel
++ export DEBIAN_FRONTEND=noninteractive
++ DEBIAN_FRONTEND=noninteractive
++ DRIVER_ARCH=x86_64
++ DRIVER_ARCH=x86_64
++ echo 'DRIVER_ARCH is x86_64'
+DRIVER_ARCH is x86_64
++ '[' 1 -eq 0 ']'
++ command=init
++ shift
++ case "${command}" in
+++ getopt -l accept-license,max-threads: -o am: --
++ options=' --'
++ '[' 0 -ne 0 ']'
++ eval set -- ' --'
+++ set -- --
++ ACCEPT_LICENSE=
++ MAX_THREADS=
+++ uname -r
++ KERNEL_VERSION=5.15.0-173-generic
++ PRIVATE_KEY=
++ PACKAGE_TAG=
++ for opt in ${options}
++ case "$opt" in
++ shift
++ break
++ '[' 0 -ne 0 ']'
++ init
++ '[' passthrough = vgpu ']'
++ sh NVIDIA-Linux-x86_64-580.126.20.run -x
+Creating directory NVIDIA-Linux-x86_64-580.126.20
+Verifying archive integrity... OK
+Uncompressing NVIDIA Accelerated Graphics Driver for Linux-x86_64 580.126.20....................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
++ cd NVIDIA-Linux-x86_64-580.126.20
++ ./nvidia-installer --silent --no-kernel-module --no-nouveau-check --no-nvidia-modprobe --no-rpms --no-backup --no-check-for-alternate-installs --no-libglx-indirect --no-install-libglvnd --x-prefix=/tmp/null --x-module-path=/tmp/null --x-library-path=/tmp/null --x-sysconfig-path=/tmp/null
+
+WARNING: Unable to determine the default X library path. The path /tmp/null/lib will be used, but this path was not detected in the ldconfig(8) cache, and no directory exists at this path, so it is likely that libraries installed there will not be found by the loader.
+
+
+WARNING: You specified the '--no-kernel-modules' command line option, nvidia-installer will not install any kernel modules as part of this driver installation, and it will not remove existing NVIDIA kernel modules not part of an earlier NVIDIA driver installation.  Please ensure that NVIDIA kernel modules matching this driver version are installed separately.
+
+
+WARNING: This NVIDIA driver package includes Vulkan components, but no Vulkan ICD loader was detected on this system. The NVIDIA Vulkan ICD will not function without the loader. Most distributions package the Vulkan loader; try installing the "vulkan-loader", "vulkan-icd-loader", or "libvulkan1" package.
+
++ mkdir -p /usr/src/nvidia-580.126.20
++ mv LICENSE mkprecompiled kernel /usr/src/nvidia-580.126.20
++ sed '9,${/^\(kernel\|LICENSE\)/!d}' .manifest
++ echo -e '\n========== NVIDIA Software Installer ==========\n'
+========== NVIDIA Software Installer ==========
++ echo -e 'Starting installation of NVIDIA driver version 580.126.20 for Linux kernel version 5.15.0-173-generic\n'
+Starting installation of NVIDIA driver version 580.126.20 for Linux kernel version 5.15.0-173-generic
++ exec
++ flock -n 3
++ echo 42816
++ trap 'echo '\''Caught signal'\''; exit 1' HUP INT QUIT PIPE TERM
++ trap _shutdown EXIT
++ _unload_driver
++ rmmod_args=()
++ local rmmod_args
++ local nvidia_deps=0
++ local nvidia_refs=0
++ local nvidia_uvm_refs=0
++ local nvidia_modeset_refs=0
++ local nvidia_peermem_refs=0
++ echo 'Stopping NVIDIA persistence daemon...'
+Stopping NVIDIA persistence daemon...
++ '[' -f /var/run/nvidia-persistenced/nvidia-persistenced.pid ']'
++ '[' -f /var/run/nvidia-gridd/nvidia-gridd.pid ']'
++ '[' -f /var/run/nvidia-fabricmanager/nv-fabricmanager.pid ']'
++ echo 'Unloading NVIDIA driver kernel modules...'
+Unloading NVIDIA driver kernel modules...
++ '[' -f /sys/module/nvidia_modeset/refcnt ']'
++ '[' -f /sys/module/nvidia_uvm/refcnt ']'
++ '[' -f /sys/module/nvidia_peermem/refcnt ']'
++ '[' -f /sys/module/nvidia/refcnt ']'
++ '[' 0 -gt 0 ']'
++ '[' 0 -gt 0 ']'
++ '[' 0 -gt 0 ']'
++ '[' 0 -gt 0 ']'
++ '[' 0 -gt 0 ']'
++ return 0
++ _unmount_rootfs
++ echo 'Unmounting NVIDIA driver rootfs...'
+Unmounting NVIDIA driver rootfs...
++ findmnt -r -o TARGET
++ grep /run/nvidia/driver
++ _kernel_requires_package
++ local proc_mount_arg=
++ echo 'Checking NVIDIA driver packages...'
+Checking NVIDIA driver packages...
++ cd /usr/src/nvidia-580.126.20/kernel
++ '[' -f /lib/modules/5.15.0-173-generic/proc/version ']'
+++ ls -d -1 'precompiled/**'
++ return 0
++ _update_ca_certificates
+++ ls -A /usr/local/share/ca-certificates
++ '[' '!' -z '' ']'
++ _update_package_cache
++ '[' '' '!=' builtin ']'
++ echo 'Updating the package cache...'
+Updating the package cache...
++ apt-get -qq update
++ _resolve_kernel_version
+++ apt-cache show linux-headers-5.15.0-173-generic
+++ sed -nE 's/^Version:\s+(([0-9]+\.){2}[0-9]+)[-.]([0-9]+).*/\1-\3/p'
+++ head -1
++ local version=5.15.0-173
+++ echo 5.15.0-173-generic
+++ sed 's/[^a-z]*//'
+++ grep -Ev '^generic|virtual'
++ local flavor=
++ echo 'Resolving Linux kernel version...'
+Resolving Linux kernel version...
++ '[' -z 5.15.0-173 ']'
++ KERNEL_VERSION=5.15.0-173-generic
++ echo 'Proceeding with Linux kernel version 5.15.0-173-generic'
+Proceeding with Linux kernel version 5.15.0-173-generic
++ return 0
++ _install_prerequisites
+++ mktemp -d
++ local tmp_dir=/tmp/tmp.Ic9IjrBxuQ
++ trap 'rm -rf /tmp/tmp.Ic9IjrBxuQ' EXIT
++ cd /tmp/tmp.Ic9IjrBxuQ
++ rm -rf /lib/modules/5.15.0-173-generic
++ mkdir -p /lib/modules/5.15.0-173-generic/proc
++ echo 'Installing Linux kernel headers...'
+Installing Linux kernel headers...
++ apt-get -qq install --no-install-recommends linux-headers-5.15.0-173-generic
++ echo 'Installing Linux kernel module files...'
+Installing Linux kernel module files...
++ apt-get -qq download linux-image-5.15.0-173-generic
++ dpkg -x linux-image-5.15.0-173-generic_5.15.0-173.183_amd64.deb .
++ mv lib/modules/5.15.0-173-generic/modules.builtin lib/modules/5.15.0-173-generic/modules.builtin.modinfo lib/modules/5.15.0-173-generic/modules.order /lib/modules/5.15.0-173-generic
++ mv lib/modules/5.15.0-173-generic/kernel /lib/modules/5.15.0-173-generic
++ depmod 5.15.0-173-generic
++ echo 'Generating Linux kernel version string...'
+Generating Linux kernel version string...
++ ls -1 boot/vmlinuz-5.15.0-173-generic
++ sed 's/\/boot\/vmlinuz-//g' -
++ '[' -z boot/vmlinuz-5.15.0-173-generic ']'
++ mv version /lib/modules/5.15.0-173-generic/proc
+++ rm -rf /tmp/tmp.Ic9IjrBxuQ
++ _create_driver_package
++ local pkg_name=nvidia-modules-5.15.0-173
++ local nvidia_sign_args=
++ local nvidia_modeset_sign_args=
++ local nvidia_uvm_sign_args=
++ trap 'make -s -j  SYSSRC=/lib/modules/5.15.0-173-generic/build clean > /dev/null' EXIT
++ echo 'Compiling NVIDIA driver kernel modules...'
+Compiling NVIDIA driver kernel modules...
++ cd /usr/src/nvidia-580.126.20/kernel
++ _gpu_direct_rdma_enabled
++ '[' false = true ']'
++ return 1
++ export IGNORE_CC_MISMATCH=1
++ IGNORE_CC_MISMATCH=1
++ make -s -j SYSSRC=/lib/modules/5.15.0-173-generic/build nv-linux.o nv-modeset-linux.o
+warning: the compiler differs from the one used to build the kernel
+  The kernel was built by: gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+  You are using:           gcc (Ubuntu 12.3.0-1ubuntu1~22.04.3) 12.3.0
+Skipping BTF generation for /usr/src/nvidia-580.126.20/kernel/nvidia-peermem.ko due to unavailability of vmlinux
+Skipping BTF generation for /usr/src/nvidia-580.126.20/kernel/nvidia-drm.ko due to unavailability of vmlinux
+Skipping BTF generation for /usr/src/nvidia-580.126.20/kernel/nvidia-modeset.ko due to unavailability of vmlinux
+Skipping BTF generation for /usr/src/nvidia-580.126.20/kernel/nvidia-uvm.ko due to unavailability of vmlinux
+Skipping BTF generation for /usr/src/nvidia-580.126.20/kernel/nvidia.ko due to unavailability of vmlinux
++ echo 'Relinking NVIDIA driver kernel modules...'
+Relinking NVIDIA driver kernel modules...
++ rm -f nvidia.ko nvidia-modeset.ko
++ ld -d -r -o nvidia.ko ./nv-linux.o ./nvidia/nv-kernel.o_binary
++ ld -d -r -o nvidia-modeset.ko ./nv-modeset-linux.o ./nvidia-modeset/nv-modeset-kernel.o_binary
++ '[' -n '' ']'
++ echo 'Building NVIDIA driver package nvidia-modules-5.15.0-173...'
+Building NVIDIA driver package nvidia-modules-5.15.0-173...
++ ../mkprecompiled --pack nvidia-modules-5.15.0-173 --description 5.15.0-173-generic --proc-mount-point /lib/modules/5.15.0-173-generic/proc --driver-version 580.126.20 --kernel-interface nv-linux.o --linked-module-name nvidia.ko --core-object-name nvidia/nv-kernel.o_binary --target-directory . --kernel-interface nv-modeset-linux.o --linked-module-name nvidia-modeset.ko --core-object-name nvidia-modeset/nv-modeset-kernel.o_binary --target-directory . --kernel-module nvidia-uvm.ko --target-directory .
++ mkdir -p precompiled
++ mv nvidia-modules-5.15.0-173 precompiled
+++ make -s -j SYSSRC=/lib/modules/5.15.0-173-generic/build clean
++ _install_driver
++ install_args=()
++ local install_args
++ echo 'Installing NVIDIA driver kernel modules...'
+Installing NVIDIA driver kernel modules...
++ cd /usr/src/nvidia-580.126.20
++ '[' -d /lib/modules/5.15.0-173-generic/kernel/drivers/video ']'
++ rm -rf /lib/modules/5.15.0-173-generic/kernel/drivers/video
++ '[' '' = yes ']'
++ nvidia-installer --kernel-module-only --no-drm --ui=none --no-nouveau-check -m=kernel
+
+WARNING: The nvidia-drm module will not be installed. As a result, DRM-KMS will not function with this installation of the NVIDIA driver.
+
+
+ERROR: Unable to open 'kernel/dkms.conf' for copying (No such file or directory)
+
+
+Welcome to the NVIDIA Software Installer for Unix/Linux
+
+Detected 24 CPUs online; setting concurrency level to 24.
+Unable to locate any tools for listing initramfs contents.
+Unable to scan initramfs: no tool found
+Installing NVIDIA driver version 580.126.20.
+Performing CC sanity check with CC="/usr/bin/cc".
+Performing CC check.
+Kernel source path: '/lib/modules/5.15.0-173-generic/build'
+
+Kernel output path: '/lib/modules/5.15.0-173-generic/build'
+
+Performing Compiler check.
+Performing Dom0 check.
+Performing Xen check.
+Performing PREEMPT_RT check.
+Performing vgpu_kvm check.
+Cleaning kernel module build directory.
+Building kernel modules:
+
+  [##############################] 100%
+Kernel module compilation complete.
+Unable to determine if Secure Boot is enabled: No such file or directory
+Kernel messages:
+[  483.023201] drm_kms_helper: Unknown symbol cec_s_phys_addr (err -2)
+[  483.023248] drm_kms_helper: Unknown symbol cec_s_conn_info (err -2)
+[  483.023313] drm_kms_helper: Unknown symbol cec_s_phys_addr_from_edid (err -2)
+[  483.023661] drm_kms_helper: Unknown symbol fb_sys_write (err -2)
+[  483.023747] drm_kms_helper: Unknown symbol sys_imageblit (err -2)
+[  483.023830] drm_kms_helper: Unknown symbol sys_fillrect (err -2)
+[  483.024403] drm_kms_helper: Unknown symbol cec_unregister_adapter (err -2)
+[  483.024662] drm_kms_helper: Unknown symbol cec_allocate_adapter (err -2)
+[  483.024711] drm_kms_helper: Unknown symbol sys_copyarea (err -2)
+[  483.024883] drm_kms_helper: Unknown symbol fb_sys_read (err -2)
+[  483.024999] drm_kms_helper: Unknown symbol cec_fill_conn_info_from_drm (err -2)
+[  483.025056] drm_kms_helper: Unknown symbol cec_received_msg_ts (err -2)
+[  483.025210] drm_kms_helper: Unknown symbol cec_register_adapter (err -2)
+[  483.482622] nvidia: loading out-of-tree module taints kernel.
+[  483.482638] nvidia: module license 'NVIDIA' taints kernel.
+[  483.482639] Disabling lock debugging due to kernel taint
+[  483.539923] nvidia: module verification failed: signature and/or required key missing - tainting kernel
+[  483.575449] nvidia-nvlink: Nvlink Core is being initialized, major device number 237
+
+[  483.592035] ACPI: \_SB_.LNKB: Enabled at IRQ 11
+[  483.684593] NVRM: loading NVIDIA UNIX x86_64 Kernel Module  580.126.20  Wed Feb 18 05:56:34 UTC 2026
+[  483.738676] nvidia_uvm: module uses symbols from proprietary module nvidia, inheriting taint.
+[  483.827454] nvidia-modeset: Loading NVIDIA Kernel Mode Setting Driver for UNIX platforms  580.126.20  Wed Feb 18 05:23:12 UTC 2026
+[  483.835321] nvidia-modeset: Unloading
+[  484.000848] nvidia-nvlink: Unregistered Nvlink Core, major device number 237
+Installing 'NVIDIA Accelerated Graphics Driver for Linux-x86_64' (580.126.20):: Installing
+
+  [                              ]   0%
+Unable to determine whether NVIDIA kernel modules are present in the initramfs. Existing NVIDIA kernel modules in the initramfs, if any, may interfere with the newly installed driver.
+
+  [##############################] 100%
+Driver file installation is complete.
+Running post-install sanity check:: Checking
+
+  [##############################] 100%
+Post-install sanity check passed.
+
+Installation of the kernel module for the NVIDIA Accelerated Graphics Driver for Linux-x86_64 (version: 580.126.20) is now complete.
+
++ _load_driver
++ echo 'Parsing kernel module parameters...'
+Parsing kernel module parameters...
++ _get_module_params
++ local base_path=/drivers
++ '[' -f /drivers/nvidia.conf ']'
++ '[' -f /drivers/nvidia-uvm.conf ']'
++ '[' -f /drivers/nvidia-modeset.conf ']'
++ '[' -f /drivers/nvidia-peermem.conf ']'
++ local nv_fw_search_path=/run/nvidia/driver/lib/firmware
++ local set_fw_path=true
++ local fw_path_config_file=/sys/module/firmware_class/parameters/path
++ [[ true == \t\r\u\e ]]
++ echo 'Configuring the following firmware search path in '\''/sys/module/firmware_class/parameters/path'\'': /run/nvidia/driver/lib/firmware'
+Configuring the following firmware search path in '/sys/module/firmware_class/parameters/path': /run/nvidia/driver/lib/firmware
+++ grep '[^[:space:]]' /sys/module/firmware_class/parameters/path
++ [[ ! -z '' ]]
++ echo -n /run/nvidia/driver/lib/firmware
++ echo 'Loading ipmi and i2c_core kernel modules...'
+Loading ipmi and i2c_core kernel modules...
++ modprobe -a i2c_core ipmi_msghandler ipmi_devintf
++ echo 'Loading NVIDIA driver kernel modules...'
+Loading NVIDIA driver kernel modules...
++ set -o xtrace +o nounset
++ modprobe nvidia
++ modprobe nvidia-uvm
++ modprobe nvidia-modeset
++ set +o xtrace -o nounset
+Starting NVIDIA persistence daemon...
+Mounting NVIDIA driver rootfs...
+Done, now waiting for signal
+root@ubuntu-mass:~#

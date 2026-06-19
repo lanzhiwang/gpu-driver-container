@@ -1,0 +1,7 @@
+driver:
+  # nvcr.io/nvidia/driver:580.126.20-ubuntu22.04
+  image: lanzhiwang/nvidia-driver
+toolkit:
+  env:
+  - name: CONTAINERD_SOCKET
+    value: /run/k3s/containerd/containerd.sock

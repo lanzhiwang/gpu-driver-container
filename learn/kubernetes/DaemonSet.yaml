@@ -1,0 +1,268 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  annotations:
+    deprecated.daemonset.template.generation: "1"
+    nvidia.com/last-applied-hash: "3048342697"
+    openshift.io/scc: nvidia-driver
+  creationTimestamp: "2026-06-19T11:58:49Z"
+  generation: 1
+  labels:
+    app: nvidia-driver-daemonset
+    app.kubernetes.io/component: nvidia-driver
+    app.kubernetes.io/managed-by: gpu-operator
+    helm.sh/chart: gpu-operator-v26.3.2
+    nvidia.com/precompiled: "false"
+  name: nvidia-driver-daemonset
+  namespace: gpu-operator
+  ownerReferences:
+    - apiVersion: nvidia.com/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ClusterPolicy
+      name: cluster-policy
+      uid: f6bd14da-45b0-4008-8c03-33523c0c709e
+  resourceVersion: "1916521"
+  uid: 46a8d05f-31f2-46cd-89d4-e509d232043e
+spec:
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: nvidia-driver-daemonset
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: nvidia-driver-ctr
+      creationTimestamp: null
+      labels:
+        app: nvidia-driver-daemonset
+        app.kubernetes.io/component: nvidia-driver
+        app.kubernetes.io/managed-by: gpu-operator
+        helm.sh/chart: gpu-operator-v26.3.2
+        nvidia.com/precompiled: "false"
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values:
+                      - nvidia-driver
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - args:
+            - init
+          command:
+            - nvidia-driver
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.hostIP
+            - name: KERNEL_MODULE_TYPE
+              value: auto
+            - name: DRIVER_CONFIG_DIGEST
+              value: "3978277121"
+          image: nvcr.io/nvidia/lanzhiwang/nvidia-driver:580.126.20-ubuntu22.04
+          imagePullPolicy: IfNotPresent
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - rm -f /run/nvidia/validations/.driver-ctr-ready
+          name: nvidia-driver-ctr
+          resources: {}
+          securityContext:
+            privileged: true
+            seLinuxOptions:
+              level: s0
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - /usr/local/bin/startup-probe.sh
+            failureThreshold: 120
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 60
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /run/nvidia
+              mountPropagation: Bidirectional
+              name: run-nvidia
+            - mountPath: /run/nvidia-fabricmanager
+              name: run-nvidia-fabricmanager
+            - mountPath: /run/nvidia-topologyd
+              name: run-nvidia-topologyd
+            - mountPath: /var/log
+              name: var-log
+            - mountPath: /dev/log
+              name: dev-log
+            - mountPath: /host-etc/os-release
+              name: host-os-release
+              readOnly: true
+            - mountPath: /run/mellanox/drivers/usr/src
+              mountPropagation: HostToContainer
+              name: mlnx-ofed-usr-src
+            - mountPath: /run/mellanox/drivers
+              mountPropagation: HostToContainer
+              name: run-mellanox-drivers
+            - mountPath: /sys/devices/system/memory/auto_online_blocks
+              name: sysfs-memory-online
+            - mountPath: /sys/module/firmware_class/parameters/path
+              name: firmware-search-path
+            - mountPath: /lib/firmware
+              name: nv-firmware
+            - mountPath: /usr/local/bin/startup-probe.sh
+              name: driver-startup-probe-script
+              subPath: startup-probe.sh
+      dnsPolicy: ClusterFirst
+      hostPID: true
+      initContainers:
+        - args:
+            - uninstall_driver
+          command:
+            - driver-manager
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: void
+            - name: ENABLE_GPU_POD_EVICTION
+              value: "true"
+            - name: ENABLE_AUTO_DRAIN
+              value: "false"
+            - name: DRAIN_USE_FORCE
+              value: "false"
+            - name: DRAIN_POD_SELECTOR_LABEL
+            - name: DRAIN_TIMEOUT_SECONDS
+              value: 0s
+            - name: DRAIN_DELETE_EMPTYDIR_DATA
+              value: "false"
+            - name: OPERATOR_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: DRIVER_CONFIG_DIGEST
+              value: "3978277121"
+          image: nvcr.io/nvidia/cloud-native/k8s-driver-manager:v0.11.0
+          imagePullPolicy: IfNotPresent
+          name: k8s-driver-manager
+          resources: {}
+          securityContext:
+            privileged: true
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /run/nvidia
+              mountPropagation: Bidirectional
+              name: run-nvidia
+            - mountPath: /host
+              mountPropagation: HostToContainer
+              name: host-root
+              readOnly: true
+            - mountPath: /sys
+              name: host-sys
+            - mountPath: /run/mellanox/drivers
+              mountPropagation: HostToContainer
+              name: run-mellanox-drivers
+      nodeSelector:
+        nvidia.com/gpu.deploy.driver: "true"
+      priorityClassName: system-node-critical
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccount: nvidia-driver
+      serviceAccountName: nvidia-driver
+      terminationGracePeriodSeconds: 30
+      tolerations:
+        - effect: NoSchedule
+          key: nvidia.com/gpu
+          operator: Exists
+      volumes:
+        - hostPath:
+            path: /run/nvidia
+            type: DirectoryOrCreate
+          name: run-nvidia
+        - hostPath:
+            path: /var/log
+            type: ""
+          name: var-log
+        - hostPath:
+            path: /dev/log
+            type: ""
+          name: dev-log
+        - hostPath:
+            path: /etc/os-release
+            type: ""
+          name: host-os-release
+        - hostPath:
+            path: /run/nvidia-fabricmanager
+            type: DirectoryOrCreate
+          name: run-nvidia-fabricmanager
+        - hostPath:
+            path: /run/nvidia-topologyd
+            type: DirectoryOrCreate
+          name: run-nvidia-topologyd
+        - hostPath:
+            path: /run/mellanox/drivers/usr/src
+            type: DirectoryOrCreate
+          name: mlnx-ofed-usr-src
+        - hostPath:
+            path: /run/mellanox/drivers
+            type: DirectoryOrCreate
+          name: run-mellanox-drivers
+        - hostPath:
+            path: /run/nvidia/validations
+            type: DirectoryOrCreate
+          name: run-nvidia-validations
+        - hostPath:
+            path: /
+            type: ""
+          name: host-root
+        - hostPath:
+            path: /sys
+            type: Directory
+          name: host-sys
+        - hostPath:
+            path: /sys/module/firmware_class/parameters/path
+            type: ""
+          name: firmware-search-path
+        - hostPath:
+            path: /sys/devices/system/memory/auto_online_blocks
+            type: ""
+          name: sysfs-memory-online
+        - hostPath:
+            path: /run/nvidia/driver/lib/firmware
+            type: DirectoryOrCreate
+          name: nv-firmware
+        - configMap:
+            defaultMode: 493
+            name: nvidia-driver-startup-probe
+          name: driver-startup-probe-script
+  updateStrategy:
+    type: OnDelete
+status:
+  currentNumberScheduled: 1
+  desiredNumberScheduled: 1
+  numberMisscheduled: 0
+  numberReady: 0
+  numberUnavailable: 1
+  observedGeneration: 1
+  updatedNumberScheduled: 1

@@ -1,0 +1,2169 @@
+阶段一: 安装环境初始化与元数据
+深度注释:
+版本信息: 当前安装的驱动版本为 550.163.01. 550 系列是 NVIDIA 的一个重要生产分支(Production Branch), 完美支持 Hopper/Ada Lovelace 架构(如 H100, L40, RTX 40 系).
+静默安装参数: --ui=none --no-questions --accept-license 表明这是一次自动化、非交互式的安装. 通常在云环境初始化脚本(cloud-init)、Ansible 自动化部署或通过 K8s DaemonSet 运行安装程序时, 会使用这种绝对静默的参数组合.
+
+nvidia-installer log file '/var/log/nvidia-installer.log'
+creation time: Wed Jan 14 17:58:45 2026
+installer version: 550.163.01
+
+PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+
+nvidia-installer command line:
+    ./nvidia-installer
+    --ui=none
+    --no-questions
+    --accept-license
+
+阶段二: 硬件探测与系统自检
+深度注释:
+并发编译优化: 安装器探测到宿主机有高达 112 个逻辑核心(这通常是一台双路 AMD EPYC 或 Intel Xeon 的高端计算节点). 为了防止编译时耗尽 IO 或内存, 它非常智能地将 Make 的并发度限制在了 32 (-j32).
+Initramfs 扫描: initramfs 是 Linux 启动时的早期内存文件系统. 安装器在这里扫描, 是为了看看里面有没有包含开源的 Nouveau 驱动(如果有, 后面必须要剔除它).
+
+Using built-in stream user interface
+-> Detected 112 CPUs online; setting concurrency level to 32.
+关键点. 安装程序检测到服务器拥有 112 个逻辑核心(通常是双路 EPYC 或 Xeon 服务器). 为了不耗尽系统内存且保证效率, 它将编译并发数 make -j 限制在了 32.
+
+-> Scanning the initramfs with lsinitramfs...
+-> Executing: /usr/bin/lsinitramfs   -l /boot/initrd.img-5.15.0-164-generic
+-> Installing NVIDIA driver version 550.163.01.
+
+-> An alternate method of installing the NVIDIA driver was detected. (This is usually a package provided by your distributor.) A driver installed via that method may integrate better with your system than a driver installed by nvidia-installer.
+检测到一种安装 NVIDIA 驱动程序的替代方法. (这通常是由您的发行版提供的一个软件包.)通过该方法安装的驱动程序, 可能比通过 nvidia-installer 安装的驱动程序能更好地与您的系统集成.
+Ubuntu 倾向于让用户用 apt 安装仓库版. 研究人员通常选择继续安装 .run 文件, 以获得最新特性, 但这要求我们必须手动处理后续的驱动依赖.
+发行版冲突警告: 由于这是 Ubuntu 系统(内核 5.15.0-164-generic 是典型的 Ubuntu 22.04 LTS 内核), 系统检测到了 Ubuntu 自带的 ubuntu-drivers 机制.
+作为高级用户, 我们选择了继续(Continue). 因为 .run 包安装能带来最新特性, 且在深度定制的 HPC 节点上, 手动控制驱动编译比依赖 apt 包管理器更可靠.
+
+Please review the message provided by the maintainer of this alternate installation method and decide how to proceed:
+请查阅此备用安装方法维护者提供的消息, 并决定后续操作:
+
+The NVIDIA driver provided by Ubuntu can be installed by launching the "Software & Updates" application, and by selecting the NVIDIA driver from the "Additional Drivers" tab.
+您可以通过启动"软件和更新"应用程序, 并在"额外驱动"选项卡中选择 NVIDIA 驱动程序, 来安装 Ubuntu 提供的 NVIDIA 驱动.
+
+阶段三: 内核接口适配探测(著名的 Conftest 阶段)
+为什么需要 Conftest? Linux 内核社区拒绝提供稳定的内部 ABI(二进制接口), 不同版本的内核内部函数名和参数随时会变. NVIDIA 驱动为了兼容成百上千种内核, 采用了这种"探测"机制.
+工作原理: conftest 会在现场生成几百个微型的 C 语言测试代码, 尝试用当前的 GCC 去编译. 如果编译成功, 驱动代码就会定义相应的宏(例如 #define NV_HAS_SET_PAGES_UC).
+关键特性探测: 最后一行 CONFTEST: ib_peer_memory_symbols 极为关键, 它探测到了 InfiniBand 内存接口, 这决定了稍后能够成功编译出支持 GPUDirect RDMA 的核心网络加速模块.
+
+(Answer: Continue installation)
+-> Performing CC sanity check with CC="/usr/bin/cc".
+```bash
+$ ll /usr/bin/cc
+lrwxrwxrwx 1 root root 20 Jan 13 13:49 /usr/bin/cc -> /etc/alternatives/cc*
+$ ll /etc/alternatives/cc
+lrwxrwxrwx 1 root root 12 Jan 13 13:49 /etc/alternatives/cc -> /usr/bin/gcc*
+$ ll /usr/bin/gcc
+lrwxrwxrwx 1 root root 6 Aug  5  2021 /usr/bin/gcc -> gcc-11*
+$ ll /usr/bin/gcc-11
+lrwxrwxrwx 1 root root 23 Apr 22  2025 /usr/bin/gcc-11 -> x86_64-linux-gnu-gcc-11*
+$ ll /usr/bin/x86_64-linux-gnu-gcc-11
+-rwxr-xr-x 1 root root 928584 Apr 22  2025 /usr/bin/x86_64-linux-gnu-gcc-11*
+$ gcc --version
+gcc (Ubuntu 11.4.0-1ubuntu1~22.04.2) 11.4.0
+Copyright (C) 2021 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+$
+```
+-> Performing CC check.
+-> Kernel source path: '/lib/modules/5.15.0-164-generic/build'
+-> Kernel output path: '/lib/modules/5.15.0-164-generic/build'
+```bash
+$ tree -L 1 /lib/modules/
+/lib/modules/
+└── 5.15.0-164-generic
+
+1 directory, 0 files
+$ tree -L 1 /lib/modules/5.15.0-164-generic/
+/lib/modules/5.15.0-164-generic/
+├── build -> /usr/src/linux-headers-5.15.0-164-generic
+├── initrd
+├── kernel
+├── modules.alias
+├── modules.alias.bin
+├── modules.builtin
+├── modules.builtin.alias.bin
+├── modules.builtin.bin
+├── modules.builtin.modinfo
+├── modules.dep
+├── modules.dep.bin
+├── modules.devname
+├── modules.order
+├── modules.softdep
+├── modules.symbols
+├── modules.symbols.bin
+└── vdso
+
+4 directories, 13 files
+$ tree -L 1 /lib/modules/5.15.0-164-generic/build
+/lib/modules/5.15.0-164-generic/build
+├── Documentation -> ../linux-headers-5.15.0-164/Documentation
+├── Kbuild -> ../linux-headers-5.15.0-164/Kbuild
+├── Kconfig -> ../linux-headers-5.15.0-164/Kconfig
+├── Makefile -> ../linux-headers-5.15.0-164/Makefile
+├── Module.symvers
+├── arch
+├── block -> ../linux-headers-5.15.0-164/block
+├── certs -> ../linux-headers-5.15.0-164/certs
+├── crypto -> ../linux-headers-5.15.0-164/crypto
+├── drivers -> ../linux-headers-5.15.0-164/drivers
+├── fs -> ../linux-headers-5.15.0-164/fs
+├── include
+├── init -> ../linux-headers-5.15.0-164/init
+├── io_uring -> ../linux-headers-5.15.0-164/io_uring
+├── ipc -> ../linux-headers-5.15.0-164/ipc
+├── kernel
+├── lib -> ../linux-headers-5.15.0-164/lib
+├── mm -> ../linux-headers-5.15.0-164/mm
+├── net -> ../linux-headers-5.15.0-164/net
+├── samples -> ../linux-headers-5.15.0-164/samples
+├── scripts
+├── security -> ../linux-headers-5.15.0-164/security
+├── sound -> ../linux-headers-5.15.0-164/sound
+├── tools
+├── ubuntu -> ../linux-headers-5.15.0-164/ubuntu
+├── usr -> ../linux-headers-5.15.0-164/usr
+└── virt -> ../linux-headers-5.15.0-164/virt
+
+23 directories, 4 files
+$
+```
+
+-> Performing Compiler check.
+-> Performing Dom0 check.
+-> Performing Xen check.
+-> Performing PREEMPT_RT check.
+-> Performing vgpu_kvm check.
+
+-> Cleaning kernel module build directory.
+   executing: 'cd kernel; /usr/bin/make -k -j32  NV_EXCLUDE_KERNEL_MODULES="" SYSSRC="/lib/modules/5.15.0-164-generic/build" SYSOUT="/lib/modules/5.15.0-164-generic/build" clean'...
+   rm -f -r conftest
+   make[1]: Entering directory '/usr/src/linux-headers-5.15.0-164-generic'
+   make[1]: Leaving directory '/usr/src/linux-headers-5.15.0-164-generic'
+
+-> Building kernel modules
+   executing: 'cd kernel; /usr/bin/make -k -j32  NV_EXCLUDE_KERNEL_MODULES="" SYSSRC="/lib/modules/5.15.0-164-generic/build" SYSOUT="/lib/modules/5.15.0-164-generic/build" '...
+   make[1]: Entering directory '/usr/src/linux-headers-5.15.0-164-generic'
+
+-> Nouveau detected in initramfs
+-> Initramfs scan complete.
+     SYMLINK /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-kernel.o
+     SYMLINK /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-modeset/nv-modeset-kernel.o
+    CONFTEST: hash__remap_4k_pfn
+    CONFTEST: set_pages_uc
+    CONFTEST: list_is_first
+    CONFTEST: set_memory_uc
+    CONFTEST: set_memory_array_uc
+    CONFTEST: set_pages_array_uc
+    CONFTEST: ioremap_cache
+    CONFTEST: ioremap_wc
+    CONFTEST: ioremap_driver_hardened
+    CONFTEST: ioremap_driver_hardened_wc
+    CONFTEST: ioremap_cache_shared
+    CONFTEST: pci_get_domain_bus_and_slot
+    CONFTEST: get_num_physpages
+    CONFTEST: pde_data
+    CONFTEST: xen_ioemu_inject_msi
+    CONFTEST: phys_to_dma
+    CONFTEST: get_dma_ops
+    CONFTEST: dma_attr_macros
+    CONFTEST: dma_map_page_attrs
+    CONFTEST: write_cr4
+    CONFTEST: of_find_node_by_phandle
+    CONFTEST: of_node_to_nid
+    CONFTEST: pnv_pci_get_npu_dev
+    CONFTEST: of_get_ibm_chip_id
+    CONFTEST: pci_bus_address
+    CONFTEST: pci_stop_and_remove_bus_device
+    CONFTEST: pci_rebar_get_possible_sizes
+    CONFTEST: wait_for_random_bytes
+    CONFTEST: register_cpu_notifier
+    CONFTEST: cpuhp_setup_state
+    CONFTEST: dma_map_resource
+    CONFTEST: get_backlight_device_by_name
+    CONFTEST: timer_setup
+    CONFTEST: pci_enable_msix_range
+    CONFTEST: kernel_read_has_pointer_pos_arg
+    CONFTEST: kernel_write_has_pointer_pos_arg
+    CONFTEST: dma_direct_map_resource
+    CONFTEST: tegra_get_platform
+    CONFTEST: tegra_bpmp_send_receive
+    CONFTEST: flush_cache_all
+    CONFTEST: vmf_insert_pfn
+    CONFTEST: jiffies_to_timespec
+    CONFTEST: ktime_get_raw_ts64
+    CONFTEST: ktime_get_real_ts64
+    CONFTEST: full_name_hash
+    CONFTEST: pci_enable_atomic_ops_to_root
+    CONFTEST: vga_tryget
+    CONFTEST: cc_platform_has
+    CONFTEST: cc_attr_guest_sev_snp
+    CONFTEST: hv_get_isolation_type
+    CONFTEST: seq_read_iter
+    CONFTEST: follow_pfn
+    CONFTEST: ptep_get
+    CONFTEST: drm_gem_object_get
+    CONFTEST: drm_gem_object_put_unlocked
+    CONFTEST: add_memory_driver_managed
+    CONFTEST: device_property_read_u64
+    CONFTEST: devm_of_platform_populate
+    CONFTEST: of_dma_configure
+    CONFTEST: of_property_count_elems_of_size
+    CONFTEST: of_property_read_variable_u8_array
+    CONFTEST: of_property_read_variable_u32_array
+    CONFTEST: i2c_new_client_device
+    CONFTEST: i2c_unregister_device
+    CONFTEST: of_get_named_gpio
+    CONFTEST: devm_gpio_request_one
+    CONFTEST: gpio_direction_input
+    CONFTEST: gpio_direction_output
+    CONFTEST: gpio_get_value
+    CONFTEST: gpio_set_value
+    CONFTEST: gpio_to_irq
+    CONFTEST: icc_get
+    CONFTEST: icc_put
+    CONFTEST: icc_set_bw
+    CONFTEST: dma_buf_export_args
+    CONFTEST: dma_buf_ops_has_kmap
+    CONFTEST: dma_buf_ops_has_kmap_atomic
+    CONFTEST: dma_buf_ops_has_map
+    CONFTEST: dma_buf_ops_has_map_atomic
+    CONFTEST: dma_buf_has_dynamic_attachment
+    CONFTEST: dma_buf_attachment_has_peer2peer
+    CONFTEST: dma_set_mask_and_coherent
+    CONFTEST: devm_clk_bulk_get_all
+    CONFTEST: get_task_ioprio
+    CONFTEST: mdev_set_iommu_device
+    CONFTEST: offline_and_remove_memory
+    CONFTEST: crypto_tfm_ctx_aligned
+    CONFTEST: module_import_ns_takes_string_literal
+    CONFTEST: wait_on_bit_lock_argument_count
+    CONFTEST: radix_tree_empty
+    CONFTEST: radix_tree_replace_slot
+    CONFTEST: pnv_npu2_init_context
+    CONFTEST: cpumask_of_node
+    CONFTEST: ioasid_get
+    CONFTEST: mm_pasid_drop
+    CONFTEST: mmget_not_zero
+    CONFTEST: mmgrab
+    CONFTEST: iommu_sva_bind_device_has_drvdata_arg
+    CONFTEST: vm_fault_to_errno
+    CONFTEST: find_next_bit_wrap
+    CONFTEST: iommu_is_dma_domain
+    CONFTEST: folio_test_swapcache
+    CONFTEST: acpi_video_backlight_use_native
+    CONFTEST: acpi_video_register_backlight
+    CONFTEST: drm_dev_unref
+    CONFTEST: drm_reinit_primary_mode_group
+    CONFTEST: get_user_pages_remote
+    CONFTEST: get_user_pages
+    CONFTEST: pin_user_pages_remote
+    CONFTEST: pin_user_pages
+    CONFTEST: drm_gem_object_lookup
+    CONFTEST: drm_atomic_state_ref_counting
+    CONFTEST: drm_driver_has_gem_prime_res_obj
+    CONFTEST: drm_atomic_helper_connector_dpms
+    CONFTEST: drm_connector_funcs_have_mode_in_name
+    CONFTEST: drm_connector_has_vrr_capable_property
+    CONFTEST: drm_framebuffer_get
+    CONFTEST: drm_dev_put
+    CONFTEST: drm_format_num_planes
+    CONFTEST: drm_connector_for_each_possible_encoder
+    CONFTEST: drm_rotation_available
+    CONFTEST: drm_vma_offset_exact_lookup_locked
+    CONFTEST: nvhost_dma_fence_unpack
+    CONFTEST: dma_fence_set_error
+    CONFTEST: fence_set_error
+    CONFTEST: sync_file_get_fence
+    CONFTEST: drm_aperture_remove_conflicting_pci_framebuffers
+    CONFTEST: aperture_remove_conflicting_devices
+    CONFTEST: aperture_remove_conflicting_pci_devices
+    CONFTEST: drm_fbdev_generic_setup
+    CONFTEST: drm_fbdev_ttm_setup
+    CONFTEST: drm_client_setup
+    CONFTEST: drm_connector_attach_hdr_output_metadata_property
+    CONFTEST: drm_helper_crtc_enable_color_mgmt
+    CONFTEST: drm_crtc_enable_color_mgmt
+    CONFTEST: drm_atomic_helper_legacy_gamma_set
+    CONFTEST: is_export_symbol_gpl_of_node_to_nid
+    CONFTEST: is_export_symbol_gpl_sme_active
+    CONFTEST: is_export_symbol_present_swiotlb_map_sg_attrs
+    CONFTEST: is_export_symbol_present_swiotlb_dma_ops
+    CONFTEST: is_export_symbol_present___close_fd
+    CONFTEST: is_export_symbol_present_close_fd
+    CONFTEST: is_export_symbol_present_get_unused_fd
+    CONFTEST: is_export_symbol_present_get_unused_fd_flags
+    CONFTEST: is_export_symbol_present_nvhost_get_default_device
+    CONFTEST: is_export_symbol_present_nvhost_syncpt_unit_interface_get_byte_offset
+    CONFTEST: is_export_symbol_present_nvhost_syncpt_unit_interface_get_aperture
+    CONFTEST: is_export_symbol_present_tegra_dce_register_ipc_client
+    CONFTEST: is_export_symbol_present_tegra_dce_unregister_ipc_client
+    CONFTEST: is_export_symbol_present_tegra_dce_client_ipc_send_recv
+    CONFTEST: is_export_symbol_present_dram_clk_to_mc_clk
+    CONFTEST: is_export_symbol_present_get_dram_num_channels
+    CONFTEST: is_export_symbol_present_tegra_dram_types
+    CONFTEST: is_export_symbol_present_pxm_to_node
+    CONFTEST: is_export_symbol_present_screen_info
+    CONFTEST: is_export_symbol_gpl_screen_info
+    CONFTEST: is_export_symbol_present_i2c_bus_status
+    CONFTEST: is_export_symbol_present_tegra_fuse_control_read
+    CONFTEST: is_export_symbol_present_tegra_get_platform
+    CONFTEST: is_export_symbol_present_pci_find_host_bridge
+    CONFTEST: is_export_symbol_present_tsec_comms_send_cmd
+    CONFTEST: is_export_symbol_present_tsec_comms_set_init_cb
+    CONFTEST: is_export_symbol_present_tsec_comms_clear_init_cb
+    CONFTEST: is_export_symbol_present_tsec_comms_alloc_mem_from_gscco
+    CONFTEST: is_export_symbol_present_tsec_comms_free_gscco_mem
+    CONFTEST: is_export_symbol_present_memory_block_size_bytes
+    CONFTEST: crypto
+    CONFTEST: crypto_akcipher_verify
+    CONFTEST: is_export_symbol_present_follow_pte
+    CONFTEST: follow_pte_arg_vma
+    CONFTEST: is_export_symbol_present_follow_pfnmap_start
+    CONFTEST: is_export_symbol_gpl_pci_ats_supported
+    CONFTEST: ecc_digits_from_bytes
+    CONFTEST: is_export_symbol_present_int_active_memcg
+    CONFTEST: is_export_symbol_present_migrate_vma_setup
+    CONFTEST: dma_ops
+    CONFTEST: swiotlb_dma_ops
+    CONFTEST: noncoherent_swiotlb_dma_ops
+    CONFTEST: vm_fault_has_address
+    CONFTEST: vm_insert_pfn_prot
+    CONFTEST: vmf_insert_pfn_prot
+    CONFTEST: vm_ops_fault_removed_vma_arg
+    CONFTEST: kmem_cache_has_kobj_remove_work
+    CONFTEST: sysfs_slab_unlink
+    CONFTEST: proc_ops
+    CONFTEST: timespec64
+    CONFTEST: vmalloc_has_pgprot_t_arg
+    CONFTEST: mm_has_mmap_lock
+    CONFTEST: pci_channel_state
+    CONFTEST: pci_dev_has_ats_enabled
+    CONFTEST: remove_memory_has_nid_arg
+    CONFTEST: add_memory_driver_managed_has_mhp_flags_arg
+    CONFTEST: num_registered_fb
+    CONFTEST: pci_driver_has_driver_managed_dma
+    CONFTEST: vm_area_struct_has_const_vm_flags
+    CONFTEST: memory_failure_has_trapno_arg
+    CONFTEST: foll_longterm_present
+    CONFTEST: bus_type_has_iommu_ops
+    CONFTEST: backing_dev_info
+    CONFTEST: mm_context_t
+    CONFTEST: vm_fault_t
+    CONFTEST: mmu_notifier_ops_invalidate_range
+    CONFTEST: mmu_notifier_ops_arch_invalidate_secondary_tlbs
+    CONFTEST: migrate_vma_added_flags
+    CONFTEST: migrate_device_range
+    CONFTEST: handle_mm_fault_has_mm_arg
+    CONFTEST: handle_mm_fault_has_pt_regs_arg
+    CONFTEST: mempolicy_has_unified_nodes
+    CONFTEST: mempolicy_has_home_node
+    CONFTEST: mpol_preferred_many_present
+    CONFTEST: mmu_interval_notifier
+    CONFTEST: drm_bus_present
+    CONFTEST: drm_bus_has_bus_type
+    CONFTEST: drm_bus_has_get_irq
+    CONFTEST: drm_bus_has_get_name
+    CONFTEST: drm_driver_has_device_list
+    CONFTEST: drm_driver_has_legacy_dev_list
+    CONFTEST: drm_driver_has_set_busid
+    CONFTEST: drm_crtc_state_has_connectors_changed
+    CONFTEST: drm_init_function_args
+    CONFTEST: drm_helper_mode_fill_fb_struct
+    CONFTEST: drm_master_drop_has_from_release_arg
+    CONFTEST: drm_driver_unload_has_int_return_type
+    CONFTEST: drm_atomic_helper_crtc_destroy_state_has_crtc_arg
+    CONFTEST: drm_atomic_helper_plane_destroy_state_has_plane_arg
+    CONFTEST: drm_mode_object_find_has_file_priv_arg
+    CONFTEST: dma_buf_owner
+    CONFTEST: drm_connector_list_iter
+    CONFTEST: drm_atomic_helper_swap_state_has_stall_arg
+    CONFTEST: drm_driver_prime_flag_present
+    CONFTEST: drm_gem_object_has_resv
+    CONFTEST: drm_crtc_state_has_async_flip
+    CONFTEST: drm_crtc_state_has_pageflip_flags
+    CONFTEST: drm_crtc_state_has_vrr_enabled
+    CONFTEST: drm_format_modifiers_present
+    CONFTEST: drm_vma_node_is_allowed_has_tag_arg
+    CONFTEST: drm_vma_offset_node_has_readonly
+    CONFTEST: drm_display_mode_has_vrefresh
+    CONFTEST: drm_driver_master_set_has_int_return_type
+    CONFTEST: drm_driver_has_gem_free_object
+    CONFTEST: drm_prime_pages_to_sg_has_drm_device_arg
+    CONFTEST: drm_driver_has_gem_prime_callbacks
+    CONFTEST: drm_crtc_atomic_check_has_atomic_state_arg
+    CONFTEST: drm_gem_object_vmap_has_map_arg
+    CONFTEST: drm_plane_atomic_check_has_atomic_state_arg
+    CONFTEST: drm_device_has_pdev
+    CONFTEST: drm_crtc_state_has_no_vblank
+    CONFTEST: drm_mode_config_has_allow_fb_modifiers
+    CONFTEST: drm_has_hdr_output_metadata
+    CONFTEST: dma_resv_add_fence
+    CONFTEST: dma_resv_reserve_fences
+    CONFTEST: reservation_object_reserve_shared_has_num_fences_arg
+    CONFTEST: drm_connector_has_override_edid
+    CONFTEST: drm_master_has_leases
+    CONFTEST: drm_file_get_master
+    CONFTEST: drm_modeset_lock_all_end
+    CONFTEST: drm_connector_lookup
+    CONFTEST: drm_connector_put
+    CONFTEST: drm_driver_has_dumb_destroy
+    CONFTEST: fence_ops_use_64bit_seqno
+    CONFTEST: drm_aperture_remove_conflicting_pci_framebuffers_has_driver_arg
+    CONFTEST: drm_mode_create_dp_colorspace_property_has_supported_colorspaces_arg
+    CONFTEST: drm_unlocked_ioctl_flag_present
+    CONFTEST: drm_output_poll_changed
+    CONFTEST: drm_driver_has_date
+    CONFTEST: file_operations_fop_unsigned_offset_present
+    CONFTEST: drm_connector_helper_funcs_mode_valid_has_const_mode_arg
+    CONFTEST: dom0_kernel_present
+    CONFTEST: nvidia_vgpu_kvm_build
+    CONFTEST: nvidia_grid_build
+    CONFTEST: nvidia_grid_csp_build
+    CONFTEST: pm_runtime_available
+    CONFTEST: pci_class_multimedia_hd_audio
+    CONFTEST: drm_available
+    CONFTEST: vfio_pci_core_available
+    CONFTEST: mdev_available
+    CONFTEST: cmd_uphy_display_port_init
+    CONFTEST: cmd_uphy_display_port_off
+    CONFTEST: memory_failure_mf_sw_simulated_defined
+    CONFTEST: drm_atomic_available
+    CONFTEST: is_export_symbol_gpl_refcount_inc
+    CONFTEST: is_export_symbol_gpl_refcount_dec_and_test
+    CONFTEST: drm_alpha_blending_available
+    CONFTEST: is_export_symbol_present_drm_gem_prime_fd_to_handle
+    CONFTEST: is_export_symbol_present_drm_gem_prime_handle_to_fd
+    CONFTEST: ib_peer_memory_symbols
+
+阶段四: 内核模块全量编译(驱动的"灵魂"铸造)
+这里展示了 NVIDIA 驱动的 5 个主要内核模块(.ko)的编译过程:
+nvidia (核心层): 处理硬件资源分配、PCIe 通信等最基础的 GPU 管理.
+nvidia-uvm (统一虚拟内存): AI 研究员最应该关注的模块. 它支持 CPU 和 GPU 共享同一个内存指针(Unified Virtual Memory), 是 CUDA 能够正常分配显存的前提.
+nvidia-modeset (显示同步): 管理显示器的分辨率、刷新率等.
+nvidia-drm (直接渲染管理器): 与 Linux 的现代图形栈(Wayland/X11)对接.
+nvidia-peermem (对等内存访问): 高性能计算必备, 使得 GPU 可以不经过 CPU, 直接通过 Mellanox 网卡(IB/RoCE)收发数据.
+
+BTF (BPF Type Format) 警告: 内核尝试为新编译的驱动生成用于 eBPF 性能追踪的调试信息. 但由于宿主机没有安装未压缩的内核调试文件(vmlinux), 所以跳过.
+影响评估: 对于日常深度学习训练毫无影响, 可以直接无视.
+
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-pci.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-dmabuf.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-nano-timer.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-acpi.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-cray.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-dma.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-i2c.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-mmap.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-p2p.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-pat.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-procfs.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-usermap.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-vm.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-vtophys.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/os-interface.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/os-mlock.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/os-pci.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/os-registry.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/os-usermap.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-modeset-interface.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-pci-table.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-kthread-q.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-memdbg.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-ibmnpu.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-report-err.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-rsync.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-msi.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-caps.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-caps-imex.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv_uvm_interface.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_aead.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_ecc.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_hkdf.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_rand.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_shash.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_rsa.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_aead_aes_gcm.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_sha.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_hmac_sha.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_internal_crypt_lib.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_hkdf_sha.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_ec.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_x509.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_rsa_ext.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nvlink_linux.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nvlink_caps.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/linux_nvswitch.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/procfs_nvswitch.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/i2c_nvswitch.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_ats_sva.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_conf_computing.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_sec2_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_maxwell_sec2.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_hopper_sec2.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_common.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_linux.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/nvstatus.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/nvCpuUuid.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/nv-kthread-q.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/nv-kthread-q-selftest.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_tools.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_global.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_gpu.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_gpu_isr.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_procfs.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_va_space.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_va_space_mm.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_gpu_semaphore.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_mem.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_rm_mem.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_channel.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_lock.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_hal.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_processors.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_range_tree.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_rb_tree.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_range_allocator.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_va_range.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_va_policy.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_va_block.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_range_group.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_gpu_replayable_faults.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_gpu_non_replayable_faults.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_gpu_access_counters.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_perf_events.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_perf_module.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_mmu.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_pte_batch.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_tlb_batch.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_push.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_pushbuffer.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_thread_context.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_tracker.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_maxwell.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_maxwell_host.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_maxwell_ce.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_maxwell_mmu.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_maxwell_fault_buffer.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_maxwell_access_counter_buffer.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_pascal.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_pascal_ce.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_pascal_host.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_pascal_mmu.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_pascal_fault_buffer.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_volta_ce.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_volta_host.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_volta_mmu.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_volta.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_volta_fault_buffer.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_volta_access_counter_buffer.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_turing.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_turing_access_counter_buffer.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_turing_fault_buffer.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_turing_mmu.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_turing_host.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_ampere.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_ampere_ce.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_ampere_host.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_ampere_mmu.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_hopper.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_hopper_fault_buffer.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_hopper_ce.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_hopper_host.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_hopper_mmu.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_ada.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_policy.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_perf_utils.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_kvmalloc.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_pmm_sysmem.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_pmm_gpu.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_migrate.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_populate_pageable.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_migrate_pageable.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_map_external.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_user_channel.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_hmm.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_perf_heuristics.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_perf_thrashing.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_perf_prefetch.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_ats.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_ats_ibm.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_ats_faults.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_test_rng.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_range_tree_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_range_allocator_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_gpu_semaphore_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_mem_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_rm_mem_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_page_tree_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_tracker_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_push_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_channel_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_ce_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_host_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_lock_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_perf_utils_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_kvmalloc_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_pmm_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_pmm_sysmem_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_perf_events_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_perf_module_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_get_rm_ptes_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_fault_buffer_flush_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_peer_identity_mappings_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_va_block_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_range_group_tree_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_thread_context_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm/uvm_rb_tree_test.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-modeset/nvidia-modeset-linux.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-modeset/nv-kthread-q.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-drv.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-utils.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-crtc.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-encoder.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-connector.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-gem.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-fb.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-modeset.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-fence.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-helper.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nv-kthread-q.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nv-pci-table.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-gem-nvkms-memory.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-gem-user-memory.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-gem-dma-buf.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-format.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-os-interface.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-linux.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-peermem/nvidia-peermem.o
+
+     LD [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia.o
+   ld -r -o /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-interface.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-pci.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-dmabuf.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-nano-timer.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-acpi.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-cray.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-dma.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-i2c.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-mmap.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-p2p.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-pat.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-procfs.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-usermap.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-vm.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-vtophys.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/os-interface.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/os-mlock.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/os-pci.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/os-registry.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/os-usermap.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-modeset-interface.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-pci-table.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-kthread-q.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-memdbg.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-ibmnpu.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-report-err.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-rsync.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-msi.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-caps.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv-caps-imex.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nv_uvm_interface.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_aead.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_ecc.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_hkdf.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_rand.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_shash.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_rsa.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_aead_aes_gcm.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_sha.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_hmac_sha.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_internal_crypt_lib.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_hkdf_sha.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_ec.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_x509.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/libspdm_rsa_ext.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nvlink_linux.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/nvlink_caps.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/linux_nvswitch.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/procfs_nvswitch.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia/i2c_nvswitch.o
+   /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-drv.c: In function 'nv_drm_register_drm_device':
+   /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm/nvidia-drm-drv.c:1821:5: warning: ISO C90 forbids mixed declarations and code [-Wdeclaration-after-statement]
+    1821 |     bool bus_is_pci =
+         |     ^~~~
+
+   ld -r -o /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-modeset/nv-modeset-interface.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-modeset/nvidia-modeset-linux.o
+            /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-modeset/nv-kthread-q.o
+
+     LD [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-modeset.o
+
+     LD [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-peermem.o
+
+     LD [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm.o
+
+     LD [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm.o
+
+     MODPOST /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/Module.symvers
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm.mod.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-modeset.mod.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-peermem.mod.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm.mod.o
+     CC [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia.mod.o
+
+     LD [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm.ko
+
+     LD [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-modeset.ko
+
+     LD [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm.ko
+
+     BTF [M] /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm.ko
+   Skipping BTF generation for /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-drm.ko due to unavailability of vmlinux
+
+     LD [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-peermem.ko
+
+     LD [M]  /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia.ko
+
+     BTF [M] /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-peermem.ko
+   Skipping BTF generation for /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-peermem.ko due to unavailability of vmlinux
+
+     BTF [M] /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-modeset.ko
+   Skipping BTF generation for /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-modeset.ko due to unavailability of vmlinux
+
+     BTF [M] /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm.ko
+   Skipping BTF generation for /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia-uvm.ko due to unavailability of vmlinux
+
+     BTF [M] /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia.ko
+   Skipping BTF generation for /tmp/selfgz1659481/NVIDIA-Linux-x86_64-550.163.01/kernel/nvidia.ko due to unavailability of vmlinux
+
+   make[1]: Leaving directory '/usr/src/linux-headers-5.15.0-164-generic'
+-> done.
+-> Kernel module compilation complete.
+
+阶段五: 硬件状态刷新与内核日志注入
+这里实际上是在打印 Linux 内核的 dmesg 日志.
+八卡神机: 从 0x00006800、0x00006a00 一直到 0x0000e800, 一共 8 个不同的 PCIe Bus-ID. 这证明该宿主机是一台配备了 8 张 GPU 的顶级算力节点(极大概率是前文你提到的拥有 8 张 A40 的服务器).
+热加载/卸载: 日志显示系统先尝试加载了一下, 然后又立刻 Unloading 了这些 DRM 和 UVM 驱动. 这是因为安装程序在把新编译好的驱动塞入内核之前, 必须把旧的或者冲突的内核模块清理干净.
+
+-> Kernel messages:
+[111758.641555] [drm] [nvidia-drm] [GPU ID 0x00006800] Loading driver
+[111758.641557] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:68:00.0 on minor 1
+[111758.641703] [drm] [nvidia-drm] [GPU ID 0x00006a00] Loading driver
+[111758.641705] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:6a:00.0 on minor 2
+[111758.641828] [drm] [nvidia-drm] [GPU ID 0x00006b00] Loading driver
+[111758.641830] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:6b:00.0 on minor 3
+[111758.641965] [drm] [nvidia-drm] [GPU ID 0x0000e500] Loading driver
+[111758.641966] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:e5:00.0 on minor 4
+[111758.642121] [drm] [nvidia-drm] [GPU ID 0x0000e600] Loading driver
+[111758.642122] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:e6:00.0 on minor 5
+[111758.642264] [drm] [nvidia-drm] [GPU ID 0x0000e700] Loading driver
+[111758.642265] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:e7:00.0 on minor 6
+[111758.642425] [drm] [nvidia-drm] [GPU ID 0x0000e800] Loading driver
+[111758.642427] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:e8:00.0 on minor 7
+[111758.648616] [drm] [nvidia-drm] [GPU ID 0x0000e800] Unloading driver
+[111758.648885] [drm] [nvidia-drm] [GPU ID 0x0000e700] Unloading driver
+[111758.649064] [drm] [nvidia-drm] [GPU ID 0x0000e600] Unloading driver
+[111758.649275] [drm] [nvidia-drm] [GPU ID 0x0000e500] Unloading driver
+[111758.649398] [drm] [nvidia-drm] [GPU ID 0x00006b00] Unloading driver
+[111758.649560] [drm] [nvidia-drm] [GPU ID 0x00006a00] Unloading driver
+[111758.649727] [drm] [nvidia-drm] [GPU ID 0x00006800] Unloading driver
+[111758.649892] [drm] [nvidia-drm] [GPU ID 0x00006700] Unloading driver
+[111758.710055] nvidia-modeset: Unloading
+[111758.787766] nvidia-uvm: Unloaded the UVM driver.
+[111758.864796] nvidia-nvlink: Unregistered Nvlink Core, major device number 505
+
+阶段六: 用户态库配置与"无头服务器"警告
+
+WARNING: nvidia-installer was forced to guess the X library path '/usr/lib64' and X module path '/usr/lib64/xorg/modules'; these paths were not queryable from the system.  If X fails to find the NVIDIA X driver module, please install the `pkg-config` utility and the X.Org SDK/development package for your distribution and reinstall the driver.
+-> Install NVIDIA's 32-bit compatibility libraries? (Answer: Yes)
+
+WARNING: This NVIDIA driver package includes Vulkan components, but no Vulkan ICD loader was detected on this system. The NVIDIA Vulkan ICD will not function without the loader. Most distributions package the Vulkan loader; try installing the "vulkan-loader", "vulkan-icd-loader", or "libvulkan1" package.
+Looking for install checker script at ./libglvnd_install_checker/check-libglvnd-install.sh
+   executing: '/bin/sh ./libglvnd_install_checker/check-libglvnd-install.sh'...
+   Found libglvnd libraries:
+   Found non-libglvnd libraries:
+   Missing libraries: libEGL.so.1 libGLX.so.0 libGL.so.1
+Will install libglvnd libraries.
+Will install libEGL vendor library config file to /usr/share/glvnd/egl_vendor.d
+-> Searching for conflicting files:
+-> done.
+-> Installing 'NVIDIA Accelerated Graphics Driver for Linux-x86_64' (550.163.01):
+
+X.Org 与 Vulkan 警告: 这两个警告非常经典. 由于这是一台跑 AI 模型/K8s 的"无头服务器(Headless Server)", 根本没有安装图形桌面(GUI), 所以找不到 X11 和 Vulkan 库. 这属于预期内现象, 完全可以忽略.
+GLVND (OpenGL Vendor-Neutral Dispatch): 安装器自动安装了 GLVND. 这是一个调度层, 允许多个显卡厂商的 OpenGL 库共存.
+
+阶段七: 系统环境封发与生效
+剔除开源雷区 (Initramfs Rebuild): 之前在阶段二扫描出来的 Nouveau 开源驱动必须被拉黑(Blacklist). 更新 initramfs 确保了下次服务器重启时, Linux 内核会加载我们刚刚编译的 NVIDIA 官方闭源驱动, 而不是开源驱动.
+ldconfig: 刷新 Linux 的动态链接库缓存. 此时系统的 /usr/lib 里已经有了 libcuda.so 等关键库, 刷新后 PyTorch 等应用才能找到它们.
+depmod -a: 生成内核模块的依赖映射关系(modules.dep). 这样日后无论在宿主机还是 K8s 容器中执行 modprobe nvidia, 内核都能知道需要一并加载关联的模块.
+圆满成功: 驱动全链路安装宣告完成.
+
+-> The initramfs will likely need to be rebuilt due to the following condition(s):
+  * Nouveau is present in the initramfs.
+
+Would you like to rebuild the initramfs? (Answer: Rebuild initramfs)
+-> /usr/sbin/update-initramfs requires a file path argument, but none was given.
+-> Executing: /usr/sbin/update-initramfs -u
+   executing: '/usr/sbin/ldconfig'...
+   executing: '/usr/sbin/depmod -a '...
+   executing: '/usr/bin/systemctl daemon-reload'...
+-> done.
+-> Driver file installation is complete.
+-> Running post-install sanity check:
+-> done.
+-> Post-install sanity check passed.
+-> Installation of the NVIDIA Accelerated Graphics Driver for Linux-x86_64 (version: 550.163.01) is now complete.
+
+
+安装完成 GPU 驱动之后, 会在系统中安装类似 libcuda.so 等动态链接库, 请问在 Linux 中如何查看可以在哪些目录加载动态链接库
+
+你好! 作为一名精通底层架构的高级研究人员, 理解 Linux 的动态链接器(Dynamic Linker/Loader, 即 ld.so)的工作机制, 对于排查 GPU 驱动、CUDA 版本冲突以及 Kubernetes 容器内的库挂载问题至关重要.
+
+在 Linux 中, 系统寻找动态链接库(如 libcuda.so, libcudnn.so)是按照严格的优先级顺序进行的. 你可以通过以下几种方法查看和管理这些加载目录:
+
+1. 查看全局动态库缓存(最权威)
+Linux 不会每次运行程序都去遍历目录找 .so 文件, 而是读取一个预先编译好的缓存文件 /etc/ld.so.cache.
+如何查看当前系统究竟配置了哪些目录?
+你可以打印出当前的缓存列表, 并过滤你关心的库:
+
+```Bash
+# 查看系统加载的所有 .so 库及其绝对路径
+ldconfig -p | grep libcuda
+
+$ ldconfig -p
+559 libs found in cache `/etc/ld.so.cache'
+	libzstd.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libzstd.so.1
+	libz.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libz.so.1
+	libyaml-0.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libyaml-0.so.2
+	libxxhash.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxxhash.so.0
+	libxtables.so.12 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxtables.so.12
+	libxslt.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxslt.so.1
+	libxshmfence.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxshmfence.so.1
+	libxml2.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxml2.so.2
+	libxmlsec1.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxmlsec1.so.1
+	libxmlsec1-openssl.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxmlsec1-openssl.so.1
+	libxmlb.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxmlb.so.2
+	libxkbfile.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxkbfile.so.1
+	libxkbcommon.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxkbcommon.so.0
+	libxkbcommon-x11.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxkbcommon-x11.so.0
+	libxcb.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb.so.1
+	libxcb-xkb.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-xkb.so.1
+	libxcb-xinput.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-xinput.so.0
+	libxcb-xinerama.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-xinerama.so.0
+	libxcb-xfixes.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-xfixes.so.0
+	libxcb-util.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-util.so.1
+	libxcb-sync.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-sync.so.1
+	libxcb-shm.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-shm.so.0
+	libxcb-shape.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-shape.so.0
+	libxcb-render.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-render.so.0
+	libxcb-render-util.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-render-util.so.0
+	libxcb-randr.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-randr.so.0
+	libxcb-present.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-present.so.0
+	libxcb-keysyms.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-keysyms.so.1
+	libxcb-image.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-image.so.0
+	libxcb-icccm.so.4 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-icccm.so.4
+	libxcb-glx.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-glx.so.0
+	libxcb-dri3.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-dri3.so.0
+	libxcb-dri2.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libxcb-dri2.so.0
+	libwrap.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libwrap.so.0
+	libwebp.so.7 (libc6,x86-64) => /lib/x86_64-linux-gnu/libwebp.so.7
+	libwayland-server.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libwayland-server.so.0
+	libwayland-client.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libwayland-client.so.0
+	libvolume_key.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libvolume_key.so.1
+	libvmtools.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libvmtools.so.0
+	libvgauth.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libvgauth.so.0
+	libvdpau_nvidia.so (libc6,x86-64, OS ABI: Linux 2.3.99) => /lib/x86_64-linux-gnu/libvdpau_nvidia.so
+	libuv.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libuv.so.1
+	libuuid.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libuuid.so.1
+	libutil.so.1 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libutil.so.1
+	libutempter.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libutempter.so.0
+	libusbmuxd-2.0.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libusbmuxd-2.0.so.6
+	libusb-1.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libusb-1.0.so.0
+	liburcu.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/liburcu.so.8
+	liburcu-signal.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/liburcu-signal.so.8
+	liburcu-qsbr.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/liburcu-qsbr.so.8
+	liburcu-memb.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/liburcu-memb.so.8
+	liburcu-mb.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/liburcu-mb.so.8
+	liburcu-common.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/liburcu-common.so.8
+	liburcu-cds.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/liburcu-cds.so.8
+	liburcu-bp.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/liburcu-bp.so.8
+	libupower-glib.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libupower-glib.so.3
+	libunwind.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/libunwind.so.8
+	libunwind-x86_64.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/libunwind-x86_64.so.8
+	libunwind-ptrace.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libunwind-ptrace.so.0
+	libunwind-coredump.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libunwind-coredump.so.0
+	libunistring.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libunistring.so.2
+	libudisks2.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libudisks2.so.0
+	libudev.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libudev.so.1
+	libuchardet.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libuchardet.so.0
+	libubsan.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libubsan.so.1
+	libtss2-tcti-swtpm.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libtss2-tcti-swtpm.so.0
+	libtss2-tcti-mssim.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libtss2-tcti-mssim.so.0
+	libtss2-tcti-device.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libtss2-tcti-device.so.0
+	libtss2-tcti-cmd.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libtss2-tcti-cmd.so.0
+	libtss2-sys.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libtss2-sys.so.1
+	libtss2-mu.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libtss2-mu.so.0
+	libtss2-esys.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libtss2-esys.so.0
+	libtsan.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libtsan.so.0
+	libtirpc.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libtirpc.so.3
+	libtirpc.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libtirpc.so
+	libtinfo.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libtinfo.so.6
+	libtinfo.so.5 (libc6,x86-64) => /lib/x86_64-linux-gnu/libtinfo.so.5
+	libtiff.so.5 (libc6,x86-64) => /lib/x86_64-linux-gnu/libtiff.so.5
+	libtic.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libtic.so.6
+	libtic.so.5 (libc6,x86-64) => /lib/x86_64-linux-gnu/libtic.so.5
+	libthread_db.so.1 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libthread_db.so.1
+	libthread_db.so (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libthread_db.so
+	libtcl8.6.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libtcl8.6.so
+	libtasn1.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libtasn1.so.6
+	libsystemd.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libsystemd.so.0
+	libstemmer.so.0d (libc6,x86-64) => /lib/x86_64-linux-gnu/libstemmer.so.0d
+	libstdc++.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libstdc++.so.6
+	libssl3.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libssl3.so
+	libssl.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libssl.so.3
+	libssh.so.4 (libc6,x86-64) => /lib/x86_64-linux-gnu/libssh.so.4
+	libss.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libss.so.2
+	libsqlite3.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libsqlite3.so.0
+	libsodium.so.23 (libc6,x86-64) => /lib/x86_64-linux-gnu/libsodium.so.23
+	libsmime3.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libsmime3.so
+	libsmbios_c.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libsmbios_c.so.2
+	libsmartcols.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libsmartcols.so.1
+	libslang.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libslang.so.2
+	libsigsegv.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libsigsegv.so.2
+	libsgutils2-1.46.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libsgutils2-1.46.so.2
+	libsepol.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libsepol.so.2
+	libsensors.so.5 (libc6,x86-64) => /lib/x86_64-linux-gnu/libsensors.so.5
+	libsemanage.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libsemanage.so.2
+	libselinux.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libselinux.so.1
+	libseccomp.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libseccomp.so.2
+	libsctp.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libsctp.so.1
+	libsasl2.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libsasl2.so.2
+	librtmp.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/librtmp.so.1
+	librt.so.1 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/librt.so.1
+	libresolv.so.2 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libresolv.so.2
+	libresolv.so (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libresolv.so
+	libreadline.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/libreadline.so.8
+	libquadmath.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libquadmath.so.0
+	libqmi-glib.so.5 (libc6,x86-64) => /lib/x86_64-linux-gnu/libqmi-glib.so.5
+	libp11-kit.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libp11-kit.so.0
+	libpython3.10.so.1.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpython3.10.so.1.0
+	libpthread.so.0 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libpthread.so.0
+	libpsl.so.5 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpsl.so.5
+	libprocps.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/libprocps.so.8
+	libpopt.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpopt.so.0
+	libpolkit-gobject-1.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpolkit-gobject-1.so.0
+	libpolkit-agent-1.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpolkit-agent-1.so.0
+	libpng16.so.16 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpng16.so.16
+	libply.so.5 (libc6,x86-64) => /lib/x86_64-linux-gnu/libply.so.5
+	libply-splash-graphics.so.5 (libc6,x86-64) => /lib/x86_64-linux-gnu/libply-splash-graphics.so.5
+	libply-splash-core.so.5 (libc6,x86-64) => /lib/x86_64-linux-gnu/libply-splash-core.so.5
+	libply-boot-client.so.5 (libc6,x86-64) => /lib/x86_64-linux-gnu/libply-boot-client.so.5
+	libplist-2.0.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libplist-2.0.so.3
+	libplds4.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libplds4.so
+	libplc4.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libplc4.so
+	libpixman-1.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpixman-1.so.0
+	libpipeline.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpipeline.so.1
+	libperl.so.5.34 (libc6,x86-64) => /lib/x86_64-linux-gnu/libperl.so.5.34
+	libpcsclite.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpcsclite.so.1
+	libpcsamplingutil.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libpcsamplingutil.so
+	libpcre2-8.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpcre2-8.so.0
+	libpcreposix.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpcreposix.so.3
+	libpcre.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpcre.so.3
+	libpcprofile.so (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libpcprofile.so
+	libpciaccess.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpciaccess.so.0
+	libpci.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpci.so.3
+	libpcap.so.0.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpcap.so.0.8
+	libparted.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libparted.so.2
+	libparted-fs-resize.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libparted-fs-resize.so.0
+	libpanelw.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpanelw.so.6
+	libpanel.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpanel.so.6
+	libpamc.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpamc.so.0
+	libpam_misc.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpam_misc.so.0
+	libpam.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpam.so.0
+	libpackagekit-glib2.so.18 (libc6,x86-64) => /lib/x86_64-linux-gnu/libpackagekit-glib2.so.18
+	libopeniscsiusr.so.0.2.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libopeniscsiusr.so.0.2.0
+	libopcodes-2.38-system.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libopcodes-2.38-system.so
+	libnvrtc.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnvrtc.so.12
+	libnvrtc.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnvrtc.so
+	libnvrtc-builtins.so.12.4 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnvrtc-builtins.so.12.4
+	libnvrtc-builtins.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnvrtc-builtins.so
+	libnvperf_target.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnvperf_target.so
+	libnvperf_host.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnvperf_host.so
+	libnvoptix.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvoptix.so.1
+	libnvjpeg.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnvjpeg.so.12
+	libnvjpeg.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnvjpeg.so
+	libnvidia-wayland-client.so.550.163.01 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-wayland-client.so.550.163.01
+	libnvidia-tls.so.550.163.01 (libc6,x86-64, OS ABI: Linux 2.3.99) => /lib/x86_64-linux-gnu/libnvidia-tls.so.550.163.01
+	libnvidia-rtcore.so.550.163.01 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-rtcore.so.550.163.01
+	libnvidia-ptxjitcompiler.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.1
+	libnvidia-ptxjitcompiler.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so
+	libnvidia-pkcs11.so.550.163.01 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-pkcs11.so.550.163.01
+	libnvidia-pkcs11-openssl3.so.550.163.01 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-pkcs11-openssl3.so.550.163.01
+	libnvidia-opticalflow.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-opticalflow.so.1
+	libnvidia-opticalflow.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-opticalflow.so
+	libnvidia-opencl.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-opencl.so.1
+	libnvidia-nvvm.so.4 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-nvvm.so.4
+	libnvidia-nvvm.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-nvvm.so
+	libnvidia-ngx.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-ngx.so.1
+	libnvidia-ml.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-ml.so.1
+	libnvidia-ml.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-ml.so
+	libnvidia-gtk3.so.550.163.01 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-gtk3.so.550.163.01
+	libnvidia-gtk2.so.550.163.01 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-gtk2.so.550.163.01
+	libnvidia-gpucomp.so.550.163.01 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-gpucomp.so.550.163.01
+	libnvidia-glvkspirv.so.550.163.01 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-glvkspirv.so.550.163.01
+	libnvidia-glsi.so.550.163.01 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-glsi.so.550.163.01
+	libnvidia-glcore.so.550.163.01 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-glcore.so.550.163.01
+	libnvidia-fbc.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-fbc.so.1
+	libnvidia-fbc.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-fbc.so
+	libnvidia-encode.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-encode.so.1
+	libnvidia-encode.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-encode.so
+	libnvidia-eglcore.so.550.163.01 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-eglcore.so.550.163.01
+	libnvidia-egl-wayland.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-egl-wayland.so.1
+	libnvidia-egl-gbm.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-egl-gbm.so.1
+	libnvidia-container.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-container.so.1
+	libnvidia-container-go.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-container-go.so.1
+	libnvidia-cfg.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-cfg.so.1
+	libnvidia-cfg.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-cfg.so
+	libnvidia-api.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-api.so.1
+	libnvidia-allocator.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-allocator.so.1
+	libnvidia-allocator.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvidia-allocator.so
+	libnvfatbin.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnvfatbin.so.12
+	libnvfatbin.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnvfatbin.so
+	libnvcuvid.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvcuvid.so.1
+	libnvcuvid.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libnvcuvid.so
+	libnvblas.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnvblas.so.12
+	libnvblas.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnvblas.so
+	libnvToolsExt.so.1 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnvToolsExt.so.1
+	libnvToolsExt.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnvToolsExt.so
+	libnvJitLink.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnvJitLink.so.12
+	libnvJitLink.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnvJitLink.so
+	libnuma.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnuma.so.1
+	libntfs-3g.so.89 (libc6,x86-64) => /lib/x86_64-linux-gnu/libntfs-3g.so.89
+	libnss3.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libnss3.so
+	libnssutil3.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libnssutil3.so
+	libnss_systemd.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnss_systemd.so.2
+	libnss_hesiod.so.2 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libnss_hesiod.so.2
+	libnss_hesiod.so (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libnss_hesiod.so
+	libnss_files.so.2 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libnss_files.so.2
+	libnss_dns.so.2 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libnss_dns.so.2
+	libnss_compat.so.2 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libnss_compat.so.2
+	libnss_compat.so (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libnss_compat.so
+	libnspr4.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libnspr4.so
+	libnsl.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnsl.so.2
+	libnsl.so.1 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libnsl.so.1
+	libnsl.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libnsl.so
+	libns-9.18.39-0ubuntu0.22.04.2-Ubuntu.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libns-9.18.39-0ubuntu0.22.04.2-Ubuntu.so
+	libnpth.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnpth.so.0
+	libnpps.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnpps.so.12
+	libnpps.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnpps.so
+	libnppitc.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppitc.so.12
+	libnppitc.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppitc.so
+	libnppisu.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppisu.so.12
+	libnppisu.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppisu.so
+	libnppist.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppist.so.12
+	libnppist.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppist.so
+	libnppim.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppim.so.12
+	libnppim.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppim.so
+	libnppig.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppig.so.12
+	libnppig.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppig.so
+	libnppif.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppif.so.12
+	libnppif.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppif.so
+	libnppidei.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppidei.so.12
+	libnppidei.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppidei.so
+	libnppicc.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppicc.so.12
+	libnppicc.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppicc.so
+	libnppial.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppial.so.12
+	libnppial.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppial.so
+	libnppc.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppc.so.12
+	libnppc.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libnppc.so
+	libnl-3.so.200 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnl-3.so.200
+	libnl-genl-3.so.200 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnl-genl-3.so.200
+	libnghttp2.so.14 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnghttp2.so.14
+	libnftnl.so.11 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnftnl.so.11
+	libnftables.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnftables.so.1
+	libnfnetlink.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnfnetlink.so.0
+	libnewt.so.0.52 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnewt.so.0.52
+	libnettle.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnettle.so.8
+	libnetplan.so.0.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnetplan.so.0.0
+	libnetfilter_conntrack.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnetfilter_conntrack.so.3
+	libncursesw.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libncursesw.so.6
+	libncurses.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libncurses.so.6
+	libmvec.so.1 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libmvec.so.1
+	libmvec.so (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libmvec.so
+	libmultipath.so.0 (libc6,x86-64) => /lib/libmultipath.so.0
+	libmultipath.so (libc6,x86-64) => /lib/libmultipath.so
+	libmspack.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libmspack.so.0
+	libmpfr.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libmpfr.so.6
+	libmpdec.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libmpdec.so.3
+	libmpdec++.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libmpdec++.so.3
+	libmpc.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libmpc.so.3
+	libmpathpersist.so.0 (libc6,x86-64) => /lib/libmpathpersist.so.0
+	libmpathpersist.so (libc6,x86-64) => /lib/libmpathpersist.so
+	libmpathcmd.so.0 (libc6,x86-64) => /lib/libmpathcmd.so.0
+	libmpathcmd.so (libc6,x86-64) => /lib/libmpathcmd.so
+	libmount.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libmount.so.1
+	libmnl.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libmnl.so.0
+	libmm-glib.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libmm-glib.so.0
+	libmenuw.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libmenuw.so.6
+	libmenu.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libmenu.so.6
+	libmemusage.so (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libmemusage.so
+	libmd.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libmd.so.0
+	libmbim-glib.so.4 (libc6,x86-64) => /lib/x86_64-linux-gnu/libmbim-glib.so.4
+	libmaxminddb.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libmaxminddb.so.0
+	libmagic.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libmagic.so.1
+	libm.so.6 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libm.so.6
+	liblz4.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/liblz4.so.1
+	liblzo2.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/liblzo2.so.2
+	liblzma.so.5 (libc6,x86-64) => /lib/x86_64-linux-gnu/liblzma.so.5
+	liblvm2cmd.so.2.03 (libc6,x86-64) => /lib/x86_64-linux-gnu/liblvm2cmd.so.2.03
+	liblsan.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/liblsan.so.0
+	liblmdb.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/liblmdb.so.0
+	libldap-2.5.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libldap-2.5.so.0
+	liblcms2.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/liblcms2.so.2
+	liblber-2.5.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/liblber-2.5.so.0
+	libk5crypto.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libk5crypto.so.3
+	libksba.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/libksba.so.8
+	libkrb5support.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libkrb5support.so.0
+	libkrb5.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libkrb5.so.3
+	libkmod.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libkmod.so.2
+	libkeyutils.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libkeyutils.so.1
+	libjson-glib-1.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libjson-glib-1.0.so.0
+	libjson-c.so.5 (libc6,x86-64) => /lib/x86_64-linux-gnu/libjson-c.so.5
+	libjpeg.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/libjpeg.so.8
+	libjcat.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libjcat.so.1
+	libjbig.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libjbig.so.0
+	libjansson.so.4 (libc6,x86-64) => /lib/x86_64-linux-gnu/libjansson.so.4
+	libitm.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libitm.so.1
+	libisns.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libisns.so.0
+	libisl.so.23 (libc6,x86-64) => /lib/x86_64-linux-gnu/libisl.so.23
+	libisccfg-9.18.39-0ubuntu0.22.04.2-Ubuntu.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libisccfg-9.18.39-0ubuntu0.22.04.2-Ubuntu.so
+	libisccc-9.18.39-0ubuntu0.22.04.2-Ubuntu.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libisccc-9.18.39-0ubuntu0.22.04.2-Ubuntu.so
+	libisc-9.18.39-0ubuntu0.22.04.2-Ubuntu.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libisc-9.18.39-0ubuntu0.22.04.2-Ubuntu.so
+	libisc-export.so.1105 (libc6,x86-64) => /lib/x86_64-linux-gnu/libisc-export.so.1105
+	libirs-9.18.39-0ubuntu0.22.04.2-Ubuntu.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libirs-9.18.39-0ubuntu0.22.04.2-Ubuntu.so
+	libip6tc.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libip6tc.so.2
+	libip4tc.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libip4tc.so.2
+	libiperf.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libiperf.so.0
+	libinih.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libinih.so.1
+	libimobiledevice-1.0.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libimobiledevice-1.0.so.6
+	libidn2.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libidn2.so.0
+	libicuuc.so.70 (libc6,x86-64) => /lib/x86_64-linux-gnu/libicuuc.so.70
+	libicutu.so.70 (libc6,x86-64) => /lib/x86_64-linux-gnu/libicutu.so.70
+	libicutest.so.70 (libc6,x86-64) => /lib/x86_64-linux-gnu/libicutest.so.70
+	libicui18n.so.70 (libc6,x86-64) => /lib/x86_64-linux-gnu/libicui18n.so.70
+	libicuio.so.70 (libc6,x86-64) => /lib/x86_64-linux-gnu/libicuio.so.70
+	libicudata.so.70 (libc6,x86-64) => /lib/x86_64-linux-gnu/libicudata.so.70
+	libhogweed.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libhogweed.so.6
+	libhistory.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/libhistory.so.8
+	libhgfs.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libhgfs.so.0
+	libharfbuzz.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libharfbuzz.so.0
+	libhandle.so.1 (libc6,x86-64) => /lib/libhandle.so.1
+	libgusb.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgusb.so.2
+	libguestlib.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libguestlib.so.0
+	libguestStoreClient.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libguestStoreClient.so.0
+	libgudev-1.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgudev-1.0.so.0
+	libgthread-2.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgthread-2.0.so.0
+	libgstreamer-1.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgstreamer-1.0.so.0
+	libgstnet-1.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgstnet-1.0.so.0
+	libgstcontroller-1.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgstcontroller-1.0.so.0
+	libgstcheck-1.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgstcheck-1.0.so.0
+	libgstbase-1.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgstbase-1.0.so.0
+	libgssapi_krb5.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgssapi_krb5.so.2
+	libgraphite2.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgraphite2.so.3
+	libgpm.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgpm.so.2
+	libgpgme.so.11 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgpgme.so.11
+	libgpg-error.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgpg-error.so.0
+	libgomp.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgomp.so.1
+	libgobject-2.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgobject-2.0.so.0
+	libgnutls.so.30 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgnutls.so.30
+	libgmp.so.10 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgmp.so.10
+	libgmodule-2.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgmodule-2.0.so.0
+	libglib-2.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libglib-2.0.so.0
+	libglapi.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libglapi.so.0
+	libgirepository-1.0.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgirepository-1.0.so.1
+	libgio-2.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgio-2.0.so.0
+	libgif.so.7 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgif.so.7
+	libgdbm_compat.so.4 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgdbm_compat.so.4
+	libgdbm.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgdbm.so.6
+	libgd.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgd.so.3
+	libgcrypt.so.20 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgcrypt.so.20
+	libgcc_s.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgcc_s.so.1
+	libgcab-1.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgcab-1.0.so.0
+	libgbm.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libgbm.so.1
+	libfwupdplugin.so.5 (libc6,x86-64) => /lib/x86_64-linux-gnu/libfwupdplugin.so.5
+	libfwupd.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libfwupd.so.2
+	libfuse3.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libfuse3.so.3
+	libftdi1.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libftdi1.so.2
+	libfribidi.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libfribidi.so.0
+	libfreetype.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libfreetype.so.6
+	libfreebl3.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libfreebl3.so
+	libfreeblpriv3.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libfreeblpriv3.so
+	libformw.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libformw.so.6
+	libform.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libform.so.6
+	libfontenc.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libfontenc.so.1
+	libfontconfig.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libfontconfig.so.1
+	libflashrom.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libflashrom.so.1
+	libfido2.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libfido2.so.1
+	libffi.so.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/libffi.so.8
+	libfdisk.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libfdisk.so.1
+	libfastjson.so.4 (libc6,x86-64) => /lib/x86_64-linux-gnu/libfastjson.so.4
+	libfakeroot-0.so (libc6,x86-64) => /usr/lib/x86_64-linux-gnu/libfakeroot/libfakeroot-0.so
+	libe2p.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libe2p.so.2
+	libext2fs.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libext2fs.so.2
+	libexslt.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libexslt.so.0
+	libexpatw.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libexpatw.so.1
+	libexpat.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libexpat.so.1
+	libevent_core-2.1.so.7 (libc6,x86-64) => /lib/x86_64-linux-gnu/libevent_core-2.1.so.7
+	libevdev.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libevdev.so.2
+	libestr.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libestr.so.0
+	libelf.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libelf.so.1
+	libefivar.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libefivar.so.1
+	libefiboot.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libefiboot.so.1
+	libedit.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libedit.so.2
+	libeatmydata.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libeatmydata.so.1
+	libeatmydata.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libeatmydata.so
+	libdw.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libdw.so.1
+	libdrm_radeon.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libdrm_radeon.so.1
+	libdrm_nouveau.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libdrm_nouveau.so.2
+	libdrm_intel.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libdrm_intel.so.1
+	libdrm_amdgpu.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libdrm_amdgpu.so.1
+	libdrm.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libdrm.so.2
+	libdns-9.18.39-0ubuntu0.22.04.2-Ubuntu.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libdns-9.18.39-0ubuntu0.22.04.2-Ubuntu.so
+	libdns-export.so.1110 (libc6,x86-64) => /lib/x86_64-linux-gnu/libdns-export.so.1110
+	libdmmp.so.0.2.0 (libc6,x86-64) => /lib/libdmmp.so.0.2.0
+	libdmmp.so (libc6,x86-64) => /lib/libdmmp.so
+	libdl.so.2 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libdl.so.2
+	libdevmapper.so.1.02.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libdevmapper.so.1.02.1
+	libdevmapper-event.so.1.02.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libdevmapper-event.so.1.02.1
+	libdevmapper-event-lvm2vdo.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libdevmapper-event-lvm2vdo.so
+	libdevmapper-event-lvm2thin.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libdevmapper-event-lvm2thin.so
+	libdevmapper-event-lvm2snapshot.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libdevmapper-event-lvm2snapshot.so
+	libdevmapper-event-lvm2raid.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libdevmapper-event-lvm2raid.so
+	libdevmapper-event-lvm2mirror.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libdevmapper-event-lvm2mirror.so
+	libdevmapper-event-lvm2.so.2.03 (libc6,x86-64) => /lib/x86_64-linux-gnu/libdevmapper-event-lvm2.so.2.03
+	libdeflate.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libdeflate.so.0
+	libdebconfclient.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libdebconfclient.so.0
+	libdconf.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libdconf.so.1
+	libdbus-1.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libdbus-1.so.3
+	libdbus-glib-1.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libdbus-glib-1.so.2
+	libdb-5.3.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libdb-5.3.so
+	libcusparse.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcusparse.so.12
+	libcusparse.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcusparse.so
+	libcusolverMg.so.11 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcusolverMg.so.11
+	libcusolverMg.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcusolverMg.so
+	libcusolver.so.11 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcusolver.so.11
+	libcusolver.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcusolver.so
+	libcurl.so.4 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcurl.so.4
+	libcurl-gnutls.so.4 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcurl-gnutls.so.4
+	libcurand.so.10 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcurand.so.10
+	libcurand.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcurand.so
+	libcupti.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcupti.so.12
+	libcupti.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcupti.so
+	libcups.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcups.so.2
+	libcuinj64.so.12.4 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcuinj64.so.12.4
+	libcuinj64.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcuinj64.so
+	libcufile_rdma.so.1 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcufile_rdma.so.1
+	libcufile_rdma.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcufile_rdma.so
+	libcufile.so.0 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcufile.so.0
+	libcufile.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcufile.so
+	libcufftw.so.11 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcufftw.so.11
+	libcufftw.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcufftw.so
+	libcufft.so.11 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcufft.so.11
+	libcufft.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcufft.so
+	libcudart.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.12
+	libcudart.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcudart.so
+	libcudadebugger.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcudadebugger.so.1
+	libcuda.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcuda.so.1
+	libcuda.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libcuda.so
+	libcublasLt.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcublasLt.so.12
+	libcublasLt.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcublasLt.so
+	libcublas.so.12 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcublas.so.12
+	libcublas.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcublas.so
+	libctf.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libctf.so.0
+	libctf-nobfd.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libctf-nobfd.so.0
+	libcryptsetup.so.12 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcryptsetup.so.12
+	libcrypto.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcrypto.so.3
+	libcrypt.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcrypt.so.1
+	libcrypt.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libcrypt.so
+	libcom_err.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcom_err.so.2
+	libcheckpoint.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libcheckpoint.so
+	libcc1.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcc1.so.0
+	libcbor.so.0.8 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcbor.so.0.8
+	libcap.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcap.so.2
+	libcap-ng.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcap-ng.so.0
+	libcairo.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcairo.so.2
+	libc_malloc_debug.so.0 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libc_malloc_debug.so.0
+	libc_malloc_debug.so (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libc_malloc_debug.so
+	libc.so.6 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libc.so.6
+	libbz2.so.1.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libbz2.so.1.0
+	libbsd.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libbsd.so.0
+	libbrotlienc.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libbrotlienc.so.1
+	libbrotlidec.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libbrotlidec.so.1
+	libbrotlicommon.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libbrotlicommon.so.1
+	libbpf.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libbpf.so.0
+	libblockdev.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libblockdev.so.2
+	libblkid.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libblkid.so.1
+	libbind9-9.18.39-0ubuntu0.22.04.2-Ubuntu.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libbind9-9.18.39-0ubuntu0.22.04.2-Ubuntu.so
+	libbfd-2.38-system.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libbfd-2.38-system.so
+	libbd_utils.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libbd_utils.so.2
+	libbd_swap.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libbd_swap.so.2
+	libbd_part_err.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libbd_part_err.so.2
+	libbd_part.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libbd_part.so.2
+	libbd_loop.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libbd_loop.so.2
+	libbd_fs.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libbd_fs.so.2
+	libbd_crypto.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libbd_crypto.so.2
+	libavahi-common.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libavahi-common.so.3
+	libavahi-client.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libavahi-client.so.3
+	libaudit.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libaudit.so.1
+	libattr.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libattr.so.1
+	libatspi.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libatspi.so.0
+	libatomic.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libatomic.so.1
+	libatm.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libatm.so.1
+	libatk-1.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libatk-1.0.so.0
+	libatk-bridge-2.0.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libatk-bridge-2.0.so.0
+	libatasmart.so.4 (libc6,x86-64) => /lib/x86_64-linux-gnu/libatasmart.so.4
+	libassuan.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libassuan.so.0
+	libasound.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libasound.so.2
+	libasan.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libasan.so.6
+	libargon2.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libargon2.so.1
+	libarchive.so.13 (libc6,x86-64) => /lib/x86_64-linux-gnu/libarchive.so.13
+	libapt-private.so.0.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libapt-private.so.0.0
+	libapt-pkg.so.6.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libapt-pkg.so.6.0
+	libappstream.so.4 (libc6,x86-64) => /lib/x86_64-linux-gnu/libappstream.so.4
+	libapparmor.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libapparmor.so.1
+	libanl.so.1 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libanl.so.1
+	libanl.so (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libanl.so
+	libaio.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libaio.so.1
+	libacl.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libacl.so.1
+	libaccinj64.so.12.4 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libaccinj64.so.12.4
+	libaccinj64.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libaccinj64.so
+	libX11.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libX11.so.6
+	libX11-xcb.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libX11-xcb.so.1
+	libXxf86vm.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXxf86vm.so.1
+	libXxf86dga.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXxf86dga.so.1
+	libXv.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXv.so.1
+	libXtst.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXtst.so.6
+	libXt.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXt.so.6
+	libXrender.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXrender.so.1
+	libXrandr.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXrandr.so.2
+	libXpm.so.4 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXpm.so.4
+	libXmuu.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXmuu.so.1
+	libXmu.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXmu.so.6
+	libXinerama.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXinerama.so.1
+	libXi.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXi.so.6
+	libXft.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXft.so.2
+	libXfixes.so.3 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXfixes.so.3
+	libXext.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXext.so.6
+	libXdmcp.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXdmcp.so.6
+	libXdamage.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXdamage.so.1
+	libXcomposite.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXcomposite.so.1
+	libXaw.so.7 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXaw.so.7
+	libXau.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libXau.so.6
+	libSM.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libSM.so.6
+	libOpenGL.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libOpenGL.so.0
+	libOpenGL.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libOpenGL.so
+	libOpenCL.so.1 (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libOpenCL.so.1
+	libOpenCL.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libOpenCL.so.1
+	libOpenCL.so (libc6,x86-64) => /usr/local/cuda/targets/x86_64-linux/lib/libOpenCL.so
+	libOpenCL.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libOpenCL.so
+	libLLVM-15.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libLLVM-15.so.1
+	libLLVM-15.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libLLVM-15.so
+	libICE.so.6 (libc6,x86-64) => /lib/x86_64-linux-gnu/libICE.so.6
+	libGLdispatch.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libGLdispatch.so.0
+	libGLX_nvidia.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libGLX_nvidia.so.0
+	libGLX_mesa.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libGLX_mesa.so.0
+	libGLX.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libGLX.so.0
+	libGLX.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libGLX.so
+	libGLESv2_nvidia.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libGLESv2_nvidia.so.2
+	libGLESv2.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libGLESv2.so.2
+	libGLESv2.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libGLESv2.so
+	libGLESv1_CM_nvidia.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libGLESv1_CM_nvidia.so.1
+	libGLESv1_CM.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libGLESv1_CM.so.1
+	libGLESv1_CM.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libGLESv1_CM.so
+	libGL.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libGL.so.1
+	libGL.so.1 (libc6,x86-64) => /lib/libGL.so.1
+	libGL.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libGL.so
+	libEGL_nvidia.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libEGL_nvidia.so.0
+	libEGL_mesa.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libEGL_mesa.so.0
+	libEGL.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libEGL.so.1
+	libEGL.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libEGL.so
+	libDeployPkg.so.0 (libc6,x86-64) => /lib/x86_64-linux-gnu/libDeployPkg.so.0
+	libBrokenLocale.so.1 (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libBrokenLocale.so.1
+	libBrokenLocale.so (libc6,x86-64, OS ABI: Linux 3.2.0) => /lib/x86_64-linux-gnu/libBrokenLocale.so
+	ld-linux-x86-64.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+Cache generated by: ldconfig (Ubuntu GLIBC 2.35-0ubuntu3.11) stable release version 2.35
+$
+```
+
+输出示例:
+libcuda.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libcuda.so.1
+
+如何查看包含哪些搜索目录?
+执行详细模式的 ldconfig, 它会列出所有被扫描的目录:
+
+```Bash
+ldconfig -v 2>/dev/null | grep -v ^$'\t'
+
+$ ldconfig -v
+/sbin/ldconfig.real: Path `/usr/local/cuda-12/targets/x86_64-linux/lib' given more than once
+(from /etc/ld.so.conf.d/988_cuda-12.conf:1 and /etc/ld.so.conf.d/000_cuda.conf:1)
+/sbin/ldconfig.real: Path `/usr/local/cuda-12.4/targets/x86_64-linux/lib' given more than once
+(from /etc/ld.so.conf.d/gds-12-4.conf:1 and /etc/ld.so.conf.d/000_cuda.conf:1)
+/sbin/ldconfig.real: Can't stat /usr/local/lib/x86_64-linux-gnu: No such file or directory
+/sbin/ldconfig.real: Path `/usr/lib/x86_64-linux-gnu' given more than once
+(from /etc/ld.so.conf.d/x86_64-linux-gnu.conf:4 and /etc/ld.so.conf.d/x86_64-linux-gnu.conf:3)
+/sbin/ldconfig.real: Path `/lib/x86_64-linux-gnu' given more than once
+(from <builtin>:0 and /etc/ld.so.conf.d/x86_64-linux-gnu.conf:3)
+/sbin/ldconfig.real: Path `/usr/lib/x86_64-linux-gnu' given more than once
+(from <builtin>:0 and /etc/ld.so.conf.d/x86_64-linux-gnu.conf:3)
+/sbin/ldconfig.real: Path `/usr/lib' given more than once
+(from <builtin>:0 and <builtin>:0)
+/usr/local/cuda/targets/x86_64-linux/lib: (from /etc/ld.so.conf.d/000_cuda.conf:1)
+	libnvfatbin.so.12 -> libnvfatbin.so.12.4.127
+	libpcsamplingutil.so -> libpcsamplingutil.so
+	libnppist.so.12 -> libnppist.so.12.2.5.30
+	libnvperf_target.so -> libnvperf_target.so
+	libnppicc.so.12 -> libnppicc.so.12.2.5.30
+	libcufftw.so.11 -> libcufftw.so.11.2.1.3
+	libOpenCL.so.1 -> libOpenCL.so.1.0.0
+	libnvblas.so.12 -> libnvblas.so.12.4.5.8
+	libaccinj64.so.12.4 -> libaccinj64.so.12.4.127
+	libnppig.so.12 -> libnppig.so.12.2.5.30
+	libnvperf_host.so -> libnvperf_host.so
+	libnppitc.so.12 -> libnppitc.so.12.2.5.30
+	libcuinj64.so.12.4 -> libcuinj64.so.12.4.127
+	libnvJitLink.so.12 -> libnvJitLink.so.12.4.127
+	libcurand.so.10 -> libcurand.so.10.3.5.147
+	libcufile.so.0 -> libcufile.so.1.9.1
+	libcusparse.so.12 -> libcusparse.so.12.3.1.170
+	libnpps.so.12 -> libnpps.so.12.2.5.30
+	libcusolver.so.11 -> libcusolver.so.11.6.1.9
+	libnvjpeg.so.12 -> libnvjpeg.so.12.3.1.117
+	libcufft.so.11 -> libcufft.so.11.2.1.3
+	libnppim.so.12 -> libnppim.so.12.2.5.30
+	libcupti.so.12 -> libcupti.so.2024.1.1
+	libcusolverMg.so.11 -> libcusolverMg.so.11.6.1.9
+	libnvrtc-builtins.so.12.4 -> libnvrtc-builtins.so.12.4.127
+	libnvrtc.so.12 -> libnvrtc.so.12.4.127
+	libnppc.so.12 -> libnppc.so.12.2.5.30
+	libnppif.so.12 -> libnppif.so.12.2.5.30
+	libcudart.so.12 -> libcudart.so.12.4.127
+	libnppidei.so.12 -> libnppidei.so.12.2.5.30
+	libnppisu.so.12 -> libnppisu.so.12.2.5.30
+	libcublas.so.12 -> libcublas.so.12.4.5.8
+	libcublasLt.so.12 -> libcublasLt.so.12.4.5.8
+	libcheckpoint.so -> libcheckpoint.so
+	libnppial.so.12 -> libnppial.so.12.2.5.30
+	libnvToolsExt.so.1 -> libnvToolsExt.so.1.0.0
+	libcufile_rdma.so.1 -> libcufile_rdma.so.1.9.1
+/usr/lib/x86_64-linux-gnu/libfakeroot: (from /etc/ld.so.conf.d/fakeroot-x86_64-linux-gnu.conf:1)
+	libfakeroot-0.so -> libfakeroot-tcp.so
+/usr/local/lib: (from /etc/ld.so.conf.d/libc.conf:2)
+/lib/x86_64-linux-gnu: (from /etc/ld.so.conf.d/x86_64-linux-gnu.conf:3)
+	libnss_dns.so.2 -> libnss_dns.so.2
+	liblvm2cmd.so.2.03 -> liblvm2cmd.so.2.03
+	libnetplan.so.0.0 -> libnetplan.so.0.0
+	libdl.so.2 -> libdl.so.2
+	libmpfr.so.6 -> libmpfr.so.6.1.0
+	libselinux.so.1 -> libselinux.so.1
+	libnvidia-glcore.so.550.163.01 -> libnvidia-glcore.so.550.163.01
+	libmm-glib.so.0 -> libmm-glib.so.0.9.0
+	libnss_systemd.so.2 -> libnss_systemd.so.2
+	libply.so.5 -> libply.so.5.0.0
+	libtic.so.5 -> libtic.so.5.9
+	libpam_misc.so.0 -> libpam_misc.so.0.82.1
+	libbind9-9.18.39-0ubuntu0.22.04.2-Ubuntu.so -> libbind9-9.18.39-0ubuntu0.22.04.2-Ubuntu.so
+	libmvec.so.1 -> libmvec.so.1
+	libe2p.so.2 -> libe2p.so.2.3
+	libgusb.so.2 -> libgusb.so.2.0.10
+	libresolv.so.2 -> libresolv.so.2
+	libxcb-glx.so.0 -> libxcb-glx.so.0.0.0
+	libxcb-icccm.so.4 -> libxcb-icccm.so.4.0.0
+	libgcc_s.so.1 -> libgcc_s.so.1
+	libdevmapper-event-lvm2.so.2.03 -> libdevmapper-event-lvm2.so.2.03
+	libgnutls.so.30 -> libgnutls.so.30.31.0
+	libfontconfig.so.1 -> libfontconfig.so.1.12.0
+	libicuuc.so.70 -> libicuuc.so.70.1
+	libXaw.so.7 -> libXaw7.so.7.0.0
+	libwebp.so.7 -> libwebp.so.7.1.3
+	libnspr4.so -> libnspr4.so
+	libjcat.so.1 -> libjcat.so.1.0.0
+	libk5crypto.so.3 -> libk5crypto.so.3.1
+	libgstnet-1.0.so.0 -> libgstnet-1.0.so.0.2003.0
+	libssl.so.3 -> libssl.so.3
+	libgirepository-1.0.so.1 -> libgirepository-1.0.so.1.0.0
+	libparted.so.2 -> libparted.so.2.0.3
+	libquadmath.so.0 -> libquadmath.so.0.0.0
+	libxcb-xinput.so.0 -> libxcb-xinput.so.0.1.0
+	libisccfg-9.18.39-0ubuntu0.22.04.2-Ubuntu.so -> libisccfg-9.18.39-0ubuntu0.22.04.2-Ubuntu.so
+	libnvidia-pkcs11.so.550.163.01 -> libnvidia-pkcs11.so.550.163.01
+	libsmbios_c.so.2 -> libsmbios_c.so.2.2.1
+	libxcb-xinerama.so.0 -> libxcb-xinerama.so.0.0.0
+	libisns.so.0 -> libisns.so.0
+	libnvidia-opencl.so.1 -> libnvidia-opencl.so.550.163.01
+	libXdamage.so.1 -> libXdamage.so.1.1.0
+	libisc-9.18.39-0ubuntu0.22.04.2-Ubuntu.so -> libisc-9.18.39-0ubuntu0.22.04.2-Ubuntu.so
+	libasan.so.6 -> libasan.so.6.0.0
+	libXfixes.so.3 -> libXfixes.so.3.1.0
+	libGLESv1_CM.so.1 -> libGLESv1_CM.so.1.2.0
+	libLLVM-15.so.1 -> libLLVM-15.so.1
+	libnghttp2.so.14 -> libnghttp2.so.14.20.1
+	libc_malloc_debug.so.0 -> libc_malloc_debug.so.0
+	libnssutil3.so -> libnssutil3.so
+	libjpeg.so.8 -> libjpeg.so.8.2.2
+	libjansson.so.4 -> libjansson.so.4.13.0
+	libnss_hesiod.so.2 -> libnss_hesiod.so.2
+	libplc4.so -> libplc4.so
+	libGLESv2_nvidia.so.2 -> libGLESv2_nvidia.so.550.163.01
+	libgstcheck-1.0.so.0 -> libgstcheck-1.0.so.0.2003.0
+	libmemusage.so -> libmemusage.so
+	libblkid.so.1 -> libblkid.so.1.1.0
+	libgthread-2.0.so.0 -> libgthread-2.0.so.0.7200.4
+	libbpf.so.0 -> libbpf.so.0.5.0
+	libtss2-tcti-swtpm.so.0 -> libtss2-tcti-swtpm.so.0.0.0
+	libfido2.so.1 -> libfido2.so.1.10.0
+	libudisks2.so.0 -> libudisks2.so.0.0.0
+	libmd.so.0 -> libmd.so.0.0.5
+	libtiff.so.5 -> libtiff.so.5.7.0
+	libxcb-shm.so.0 -> libxcb-shm.so.0.0.0
+	libxcb-randr.so.0 -> libxcb-randr.so.0.1.0
+	libcudadebugger.so.1 -> libcudadebugger.so.550.163.01
+	libapt-private.so.0.0 -> libapt-private.so.0.0.0
+	libopcodes-2.38-system.so -> libopcodes-2.38-system.so
+	libpcre.so.3 -> libpcre.so.3.13.3
+	libwayland-client.so.0 -> libwayland-client.so.0.20.0
+	libdevmapper-event.so.1.02.1 -> libdevmapper-event.so.1.02.1
+	libatm.so.1 -> libatm.so.1.0.0
+	libdns-export.so.1110 -> libdns-export.so.1110.0.2
+	libEGL_nvidia.so.0 -> libEGL_nvidia.so.550.163.01
+	libDeployPkg.so.0 -> libDeployPkg.so.0.0.0
+	libflashrom.so.1 -> libflashrom.so.1.0.0
+	libcryptsetup.so.12 -> libcryptsetup.so.12.7.0
+	libguestStoreClient.so.0 -> libguestStoreClient.so.0.0.0
+	libtasn1.so.6 -> libtasn1.so.6.6.2
+	libOpenCL.so.1 -> libOpenCL.so.1.0.0
+	libnss3.so -> libnss3.so
+	libjson-glib-1.0.so.0 -> libjson-glib-1.0.so.0.600.6
+	libxkbcommon.so.0 -> libxkbcommon.so.0.0.0
+/sbin/ldconfig.real: /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 is the dynamic linker, ignoring
+
+	ld-linux-x86-64.so.2 -> ld-linux-x86-64.so.2
+	libdevmapper.so.1.02.1 -> libdevmapper.so.1.02.1
+	libdb-5.3.so -> libdb-5.3.so
+	libdrm_nouveau.so.2 -> libdrm_nouveau.so.2.0.0
+	libdrm_intel.so.1 -> libdrm_intel.so.1.0.0
+	libgcab-1.0.so.0 -> libgcab-1.0.so.0.1.0
+	libxkbcommon-x11.so.0 -> libxkbcommon-x11.so.0.0.0
+	libxcb-render.so.0 -> libxcb-render.so.0.0.0
+	libguestlib.so.0 -> libguestlib.so.0.0.0
+	libpackagekit-glib2.so.18 -> libpackagekit-glib2.so.18.1.3
+	libmnl.so.0 -> libmnl.so.0.2.0
+	libXrender.so.1 -> libXrender.so.1.3.0
+	libevent_core-2.1.so.7 -> libevent_core-2.1.so.7.0.1
+	libxcb-render-util.so.0 -> libxcb-render-util.so.0.0.0
+	libupower-glib.so.3 -> libupower-glib.so.3.1.0
+	libnvidia-wayland-client.so.550.163.01 -> libnvidia-wayland-client.so.550.163.01
+	libcups.so.2 -> libcups.so.2
+	libkrb5.so.3 -> libkrb5.so.3.3
+	libxxhash.so.0 -> libxxhash.so.0.8.1
+	libsasl2.so.2 -> libsasl2.so.2.0.25
+	libICE.so.6 -> libICE.so.6.3.0
+	libisl.so.23 -> libisl.so.23.1.0
+	liblz4.so.1 -> liblz4.so.1.9.3
+	libarchive.so.13 -> libarchive.so.13.6.0
+	libXrandr.so.2 -> libXrandr.so.2.2.0
+	libbd_loop.so.2 -> libbd_loop.so.2.0.0
+	libmpdec++.so.3 -> libmpdec++.so.2.5.1
+	libtcl8.6.so -> libtcl8.6.so.0
+	libnftables.so.1 -> libnftables.so.1.1.0
+	libmpc.so.3 -> libmpc.so.3.2.1
+	libtic.so.6 -> libtic.so.6.3
+	libnsl.so.2 -> libnsl.so.2.0.1
+	libfdisk.so.1 -> libfdisk.so.1.1.0
+	libxml2.so.2 -> libxml2.so.2.9.13
+	libGLX_nvidia.so.0 -> libGLX_nvidia.so.550.163.01
+	libext2fs.so.2 -> libext2fs.so.2.4
+	libxmlb.so.2 -> libxmlb.so.2.0.0
+	libnvidia-allocator.so.1 -> libnvidia-allocator.so.550.163.01
+	libirs-9.18.39-0ubuntu0.22.04.2-Ubuntu.so -> libirs-9.18.39-0ubuntu0.22.04.2-Ubuntu.so
+	libbd_part_err.so.2 -> libbd_part_err.so.2.0.0
+	libnvidia-container-go.so.1 -> libnvidia-container-go.so.1.18.1
+	libavahi-common.so.3 -> libavahi-common.so.3.5.4
+	libpanel.so.6 -> libpanel.so.6.3
+	libhistory.so.8 -> libhistory.so.8.1
+	libxcb-xfixes.so.0 -> libxcb-xfixes.so.0.0.0
+	libncurses.so.6 -> libncurses.so.6.3
+	libgobject-2.0.so.0 -> libgobject-2.0.so.0.7200.4
+	libSM.so.6 -> libSM.so.6.0.1
+	libmbim-glib.so.4 -> libmbim-glib.so.4.7.0
+	libcrypt.so.1 -> libcrypt.so.1.1.0
+	libnfnetlink.so.0 -> libnfnetlink.so.0.2.0
+	libdbus-1.so.3 -> libdbus-1.so.3.19.13
+	libpolkit-gobject-1.so.0 -> libpolkit-gobject-1.so.0.0.0
+	libnvidia-egl-gbm.so.1 -> libnvidia-egl-gbm.so.1.1.1
+	libns-9.18.39-0ubuntu0.22.04.2-Ubuntu.so -> libns-9.18.39-0ubuntu0.22.04.2-Ubuntu.so
+	libm.so.6 -> libm.so.6
+	libpython3.10.so.1.0 -> libpython3.10.so.1.0
+	libutil.so.1 -> libutil.so.1
+	libbfd-2.38-system.so -> libbfd-2.38-system.so
+	libfastjson.so.4 -> libfastjson.so.4.3.0
+	libdeflate.so.0 -> libdeflate.so.0
+	libnvidia-ml.so.1 -> libnvidia-ml.so.550.163.01
+	libunwind-x86_64.so.8 -> libunwind-x86_64.so.8.0.1
+	libexpatw.so.1 -> libexpatw.so.1.8.7
+	libxkbfile.so.1 -> libxkbfile.so.1.0.2
+	libzstd.so.1 -> libzstd.so.1.4.8
+	libsigsegv.so.2 -> libsigsegv.so.2.0.6
+	libgif.so.7 -> libgif.so.7.1.0
+	libudev.so.1 -> libudev.so.1.7.2
+	libnl-genl-3.so.200 -> libnl-genl-3.so.200.26.0
+	libnvidia-tls.so.550.163.01 -> libnvidia-tls.so.550.163.01
+	libgpm.so.2 -> libgpm.so.2
+	libbrotlicommon.so.1 -> libbrotlicommon.so.1.0.9
+	libelf.so.1 -> libelf-0.186.so
+	libXt.so.6 -> libXt.so.6.0.0
+	libpamc.so.0 -> libpamc.so.0.82.1
+	libcairo.so.2 -> libcairo.so.2.11600.0
+	libgudev-1.0.so.0 -> libgudev-1.0.so.0.3.0
+	libattr.so.1 -> libattr.so.1.1.2501
+	libldap-2.5.so.0 -> libldap-2.5.so.0.1.13
+	libgstbase-1.0.so.0 -> libgstbase-1.0.so.0.2003.0
+	libsmime3.so -> libsmime3.so
+	libwrap.so.0 -> libwrap.so.0.7.6
+	libxtables.so.12 -> libxtables.so.12.4.0
+	libpipeline.so.1 -> libpipeline.so.1.5.5
+	libxcb-sync.so.1 -> libxcb-sync.so.1.0.0
+	libuuid.so.1 -> libuuid.so.1.3.0
+	libapparmor.so.1 -> libapparmor.so.1.8.2
+	libsctp.so.1 -> libsctp.so.1.0.19
+	libXv.so.1 -> libXv.so.1.0.0
+	libnvidia-nvvm.so.4 -> libnvidia-nvvm.so.550.163.01
+	libfreetype.so.6 -> libfreetype.so.6.18.1
+	libcbor.so.0.8 -> libcbor.so.0.8.0
+	libssh.so.4 -> libssh.so.4.8.7
+	libXmuu.so.1 -> libXmuu.so.1.0.0
+	libdrm.so.2 -> libdrm.so.2.4.0
+	liburcu-bp.so.8 -> liburcu-bp.so.8.0.0
+	libxmlsec1.so.1 -> libxmlsec1.so.1.2.33
+	libbd_fs.so.2 -> libbd_fs.so.2.0.0
+	liburcu-mb.so.8 -> liburcu-mb.so.8.0.0
+	libgcrypt.so.20 -> libgcrypt.so.20.3.4
+	libnvidia-fbc.so.1 -> libnvidia-fbc.so.550.163.01
+	liblzma.so.5 -> liblzma.so.5.2.5
+	libxcb-shape.so.0 -> libxcb-shape.so.0.0.0
+	libcap.so.2 -> libcap.so.2.44
+	libXau.so.6 -> libXau.so.6.0.0
+	libpciaccess.so.0 -> libpciaccess.so.0.11.1
+	libksba.so.8 -> libksba.so.8.14.0
+	libbrotlidec.so.1 -> libbrotlidec.so.1.0.9
+	libGLESv1_CM_nvidia.so.1 -> libGLESv1_CM_nvidia.so.550.163.01
+	libnvidia-glsi.so.550.163.01 -> libnvidia-glsi.so.550.163.01
+	libgraphite2.so.3 -> libgraphite2.so.3.2.1
+	libctf.so.0 -> libctf.so.0.0.0
+	libatspi.so.0 -> libatspi.so.0.0.1
+	libnftnl.so.11 -> libnftnl.so.11.6.0
+	libXinerama.so.1 -> libXinerama.so.1.0.0
+	libcurl.so.4 -> libcurl.so.4.7.0
+	libpam.so.0 -> libpam.so.0.85.1
+	libefivar.so.1 -> libefivar.so.1.37
+	libmenu.so.6 -> libmenu.so.6.3
+	libimobiledevice-1.0.so.6 -> libimobiledevice.so.6.0.0
+	libdrm_amdgpu.so.1 -> libdrm_amdgpu.so.1.0.0
+	libsensors.so.5 -> libsensors.so.5.0.0
+	libntfs-3g.so.89 -> libntfs-3g.so.89.0.0
+	libyaml-0.so.2 -> libyaml-0.so.2.0.6
+	liblber-2.5.so.0 -> liblber-2.5.so.0.1.13
+	libbz2.so.1.0 -> libbz2.so.1.0.4
+	libpthread.so.0 -> libpthread.so.0
+	libdrm_radeon.so.1 -> libdrm_radeon.so.1.0.1
+	libgmp.so.10 -> libgmp.so.10.4.1
+	libprocps.so.8 -> libprocps.so.8.0.3
+	libtsan.so.0 -> libtsan.so.0.0.0
+	libnvidia-api.so.1 -> libnvidia-api.so.1
+	libmpdec.so.3 -> libmpdec.so.2.5.1
+	libcrypto.so.3 -> libcrypto.so.3
+	libXxf86dga.so.1 -> libXxf86dga.so.1.0.0
+	libxcb-util.so.1 -> libxcb-util.so.1.0.0
+	libatomic.so.1 -> libatomic.so.1.2.0
+	libjbig.so.0 -> libjbig.so.0
+	libpci.so.3 -> libpci.so.3.7.0
+	libtss2-sys.so.1 -> libtss2-sys.so.1.0.0
+	libnvidia-ptxjitcompiler.so.1 -> libnvidia-ptxjitcompiler.so.550.163.01
+	libply-splash-core.so.5 -> libply-splash-core.so.5.0.0
+	libxcb-present.so.0 -> libxcb-present.so.0.0.0
+	libnvoptix.so.1 -> libnvoptix.so.550.163.01
+	libdconf.so.1 -> libdconf.so.1.0.0
+	libX11.so.6 -> libX11.so.6.4.0
+	libpcre2-8.so.0 -> libpcre2-8.so.0.10.4
+	libEGL.so.1 -> libEGL.so.1.1.0
+	libbd_crypto.so.2 -> libbd_crypto.so.2.0.0
+	libicutu.so.70 -> libicutu.so.70.1
+	libdw.so.1 -> libdw-0.186.so
+	libmount.so.1 -> libmount.so.1.1.0
+	libicutest.so.70 -> libicutest.so.70.1
+	libgssapi_krb5.so.2 -> libgssapi_krb5.so.2.2
+	libcc1.so.0 -> libcc1.so.0.0.0
+	libGLX_mesa.so.0 -> libGLX_mesa.so.0.0.0
+	libgd.so.3 -> libgd.so.3.0.8
+	libavahi-client.so.3 -> libavahi-client.so.3.2.9
+	libmspack.so.0 -> libmspack.so.0.1.0
+	libtss2-tcti-cmd.so.0 -> libtss2-tcti-cmd.so.0.0.0
+	libnvidia-pkcs11-openssl3.so.550.163.01 -> libnvidia-pkcs11-openssl3.so.550.163.01
+	libefiboot.so.1 -> libefiboot.so.1.37
+	libqmi-glib.so.5 -> libqmi-glib.so.5.9.0
+	liblcms2.so.2 -> liblcms2.so.2.0.12
+	libxslt.so.1 -> libxslt.so.1.1.34
+	libisc-export.so.1105 -> libisc-export.so.1105.0.2
+	libmagic.so.1 -> libmagic.so.1.0.0
+	libnvidia-eglcore.so.550.163.01 -> libnvidia-eglcore.so.550.163.01
+	libpcprofile.so -> libpcprofile.so
+	libcom_err.so.2 -> libcom_err.so.2.1
+	liblsan.so.0 -> liblsan.so.0.0.0
+	liburcu-memb.so.8 -> liburcu-memb.so.8.0.0
+	libjson-c.so.5 -> libjson-c.so.5.1.0
+	libgomp.so.1 -> libgomp.so.1.0.0
+	libparted-fs-resize.so.0 -> libparted-fs-resize.so.0.0.3
+	liburcu-signal.so.8 -> liburcu-signal.so.8.0.0
+	libGLdispatch.so.0 -> libGLdispatch.so.0.0.0
+	libicudata.so.70 -> libicudata.so.70.1
+	libnvidia-gtk3.so.550.163.01 -> libnvidia-gtk3.so.550.163.01
+	libnetfilter_conntrack.so.3 -> libnetfilter_conntrack.so.3.8.0
+	libisccc-9.18.39-0ubuntu0.22.04.2-Ubuntu.so -> libisccc-9.18.39-0ubuntu0.22.04.2-Ubuntu.so
+	libXdmcp.so.6 -> libXdmcp.so.6.0.0
+	libgpgme.so.11 -> libgpgme.so.11.25.0
+	libpcap.so.0.8 -> libpcap.so.1.10.1
+	liblzo2.so.2 -> liblzo2.so.2.0.0
+	libnvidia-ngx.so.1 -> libnvidia-ngx.so.550.163.01
+	libsqlite3.so.0 -> libsqlite3.so.0.8.6
+	libp11-kit.so.0 -> libp11-kit.so.0.3.0
+	libEGL_mesa.so.0 -> libEGL_mesa.so.0.0.0
+	libformw.so.6 -> libformw.so.6.3
+	libgmodule-2.0.so.0 -> libgmodule-2.0.so.0.7200.4
+	libharfbuzz.so.0 -> libharfbuzz.so.0.20704.0
+	libapt-pkg.so.6.0 -> libapt-pkg.so.6.0.0
+	libnpth.so.0 -> libnpth.so.0.1.2
+	libedit.so.2 -> libedit.so.2.0.68
+	libfwupdplugin.so.5 -> libfwupdplugin.so.5.0.0
+	libexslt.so.0 -> libexslt.so.0.8.20
+	liblmdb.so.0 -> liblmdb.so.0.0.0
+	libnsl.so.1 -> libnsl.so.1
+	libsmartcols.so.1 -> libsmartcols.so.1.1.0
+	libiperf.so.0 -> libiperf.so.0.0.0
+	libsemanage.so.2 -> libsemanage.so.2
+	libc.so.6 -> libc.so.6
+	libxcb-keysyms.so.1 -> libxcb-keysyms.so.1.0.0
+	libXft.so.2 -> libXft.so.2.3.4
+	libctf-nobfd.so.0 -> libctf-nobfd.so.0.0.0
+	libXtst.so.6 -> libXtst.so.6.1.0
+	libnvidia-rtcore.so.550.163.01 -> libnvidia-rtcore.so.550.163.01
+	libgio-2.0.so.0 -> libgio-2.0.so.0.7200.4
+	libsodium.so.23 -> libsodium.so.23.3.0
+	libfuse3.so.3 -> libfuse3.so.3.10.5
+	libXext.so.6 -> libXext.so.6.4.0
+	libtss2-esys.so.0 -> libtss2-esys.so.0.0.0
+	libpcsclite.so.1 -> libpcsclite.so.1.0.0
+	libdns-9.18.39-0ubuntu0.22.04.2-Ubuntu.so -> libdns-9.18.39-0ubuntu0.22.04.2-Ubuntu.so
+	libuv.so.1 -> libuv.so.1.0.0
+	libnss_files.so.2 -> libnss_files.so.2
+	libopeniscsiusr.so.0.2.0 -> libopeniscsiusr.so.0.2.0
+	libpolkit-agent-1.so.0 -> libpolkit-agent-1.so.0.0.0
+	libidn2.so.0 -> libidn2.so.0.3.7
+	libatk-1.0.so.0 -> libatk-1.0.so.0.23609.1
+	libnvidia-gpucomp.so.550.163.01 -> libnvidia-gpucomp.so.550.163.01
+	libanl.so.1 -> libanl.so.1
+	libnvidia-egl-wayland.so.1 -> libnvidia-egl-wayland.so.1.1.13
+	libncursesw.so.6 -> libncursesw.so.6.3
+	libpopt.so.0 -> libpopt.so.0.0.1
+	libxshmfence.so.1 -> libxshmfence.so.1.0.0
+	libnewt.so.0.52 -> libnewt.so.0.52.21
+	libftdi1.so.2 -> libftdi1.so.2.5.0
+	libassuan.so.0 -> libassuan.so.0.8.5
+	libpng16.so.16 -> libpng16.so.16.37.0
+	libunwind-ptrace.so.0 -> libunwind-ptrace.so.0.0.0
+	libXcomposite.so.1 -> libXcomposite.so.1.0.0
+	libnvidia-opticalflow.so.1 -> libnvidia-opticalflow.so.550.163.01
+	libhogweed.so.6 -> libhogweed.so.6.4
+	libssl3.so -> libssl3.so
+	libnvidia-gtk2.so.550.163.01 -> libnvidia-gtk2.so.550.163.01
+	libnvidia-glvkspirv.so.550.163.01 -> libnvidia-glvkspirv.so.550.163.01
+	libasound.so.2 -> libasound.so.2.0.0
+	libunwind-coredump.so.0 -> libunwind-coredump.so.0.0.0
+	libgstcontroller-1.0.so.0 -> libgstcontroller-1.0.so.0.2003.0
+	libicuio.so.70 -> libicuio.so.70.1
+	libperl.so.5.34 -> libperl.so.5.34.0
+	libbsd.so.0 -> libbsd.so.0.11.5
+	libaio.so.1 -> libaio.so.1.0.1
+	libplds4.so -> libplds4.so
+	libsgutils2-1.46.so.2 -> libsgutils2-1.46.so.2.0.0
+	libpsl.so.5 -> libpsl.so.5.3.2
+	libnvidia-cfg.so.1 -> libnvidia-cfg.so.550.163.01
+	libwayland-server.so.0 -> libwayland-server.so.0.20.0
+	libfribidi.so.0 -> libfribidi.so.0.4.0
+	libeatmydata.so.1 -> libeatmydata.so.1.3.0
+	libseccomp.so.2 -> libseccomp.so.2.5.3
+	libmenuw.so.6 -> libmenuw.so.6.3
+	libvmtools.so.0 -> libvmtools.so.0.0.0
+	libkmod.so.2 -> libkmod.so.2.3.7
+	libcurl-gnutls.so.4 -> libcurl-gnutls.so.4.7.0
+	libdbus-glib-1.so.2 -> libdbus-glib-1.so.2.3.5
+	libvolume_key.so.1 -> libvolume_key.so.1.2.3
+	libffi.so.8 -> libffi.so.8.1.0
+	libbd_utils.so.2 -> libbd_utils.so.2.1.0
+	libusb-1.0.so.0 -> libusb-1.0.so.0.3.0
+	libxcb.so.1 -> libxcb.so.1.1.0
+	libip6tc.so.2 -> libip6tc.so.2.0.0
+	libxcb-dri3.so.0 -> libxcb-dri3.so.0.0.0
+	libgstreamer-1.0.so.0 -> libgstreamer-1.0.so.0.2003.0
+	libstdc++.so.6 -> libstdc++.so.6.0.30
+	libpixman-1.so.0 -> libpixman-1.so.0.40.0
+	libfwupd.so.2 -> libfwupd.so.2.0.0
+	libappstream.so.4 -> libappstream.so.0.15.2
+	libXi.so.6 -> libXi.so.6.1.0
+	libX11-xcb.so.1 -> libX11-xcb.so.1.0.0
+	libutempter.so.0 -> libutempter.so.1.2.1
+	libXxf86vm.so.1 -> libXxf86vm.so.1.0.0
+	libnettle.so.8 -> libnettle.so.8.4
+	libbd_swap.so.2 -> libbd_swap.so.2.0.0
+	libblockdev.so.2 -> libblockdev.so.2.0.0
+	libdebconfclient.so.0 -> libdebconfclient.so.0.0.0
+	libubsan.so.1 -> libubsan.so.1.0.0
+	libnl-3.so.200 -> libnl-3.so.200.26.0
+	libip4tc.so.2 -> libip4tc.so.2.0.0
+	libpanelw.so.6 -> libpanelw.so.6.3
+	libstemmer.so.0d -> libstemmer.so.0d.0.0
+	libunwind.so.8 -> libunwind.so.8.0.1
+	libtss2-tcti-mssim.so.0 -> libtss2-tcti-mssim.so.0.0.0
+	libxcb-image.so.0 -> libxcb-image.so.0.0.0
+	libtss2-mu.so.0 -> libtss2-mu.so.0.0.0
+	libGLX.so.0 -> libGLX.so.0.0.0
+	libtinfo.so.6 -> libtinfo.so.6.3
+	libicui18n.so.70 -> libicui18n.so.70.1
+	liburcu-cds.so.8 -> liburcu-cds.so.8.0.0
+	libvgauth.so.0 -> libvgauth.so.0.0.0
+	libnvcuvid.so.1 -> libnvcuvid.so.550.163.01
+	libthread_db.so.1 -> libthread_db.so.1
+	libpcreposix.so.3 -> libpcreposix.so.3.13.3
+	liburcu.so.8 -> liburcu.so.8.0.0
+	libform.so.6 -> libform.so.6.3
+	libcuda.so.1 -> libcuda.so.550.163.01
+	libXpm.so.4 -> libXpm.so.4.11.0
+	libunistring.so.2 -> libunistring.so.2.2.0
+	libslang.so.2 -> libslang.so.2.3.2
+	librtmp.so.1 -> librtmp.so.1
+	libkrb5support.so.0 -> libkrb5support.so.0.1
+	libGL.so.1 -> libGL.so.1.7.0
+	libtss2-tcti-device.so.0 -> libtss2-tcti-device.so.0.0.0
+	libmaxminddb.so.0 -> libmaxminddb.so.0.0.7
+	libply-boot-client.so.5 -> libply-boot-client.so.5.0.0
+	libGLESv2.so.2 -> libGLESv2.so.2.1.0
+	libbd_part.so.2 -> libbd_part.so.2.0.0
+	libuchardet.so.0 -> libuchardet.so.0.0.7
+	libgpg-error.so.0 -> libgpg-error.so.0.32.1
+	libglib-2.0.so.0 -> libglib-2.0.so.0.7200.4
+	libgdbm.so.6 -> libgdbm.so.6.0.0
+	libestr.so.0 -> libestr.so.0.0.0
+	libtinfo.so.5 -> libtinfo.so.5.9
+	libinih.so.1 -> libinih.so.1
+	libnuma.so.1 -> libnuma.so.1.0.0
+	libXmu.so.6 -> libXmu.so.6.2.0
+	libhgfs.so.0 -> libhgfs.so.0.0.0
+	libz.so.1 -> libz.so.1.2.11
+	libOpenGL.so.0 -> libOpenGL.so.0.0.0
+	libusbmuxd-2.0.so.6 -> libusbmuxd.so.6.0.0
+	libatasmart.so.4 -> libatasmart.so.4.0.5
+	libevdev.so.2 -> libevdev.so.2.3.0
+	libargon2.so.1 -> libargon2.so.1
+	libitm.so.1 -> libitm.so.1.0.0
+	libgbm.so.1 -> libgbm.so.1.0.0
+	libnvidia-encode.so.1 -> libnvidia-encode.so.550.163.01
+	libkeyutils.so.1 -> libkeyutils.so.1.9
+	liburcu-qsbr.so.8 -> liburcu-qsbr.so.8.0.0
+	libacl.so.1 -> libacl.so.1.1.2301
+	libnvidia-container.so.1 -> libnvidia-container.so.1.18.1
+	libply-splash-graphics.so.5 -> libply-splash-graphics.so.5.0.0
+	libgdbm_compat.so.4 -> libgdbm_compat.so.4.0.0
+	libreadline.so.8 -> libreadline.so.8.1
+	libglapi.so.0 -> libglapi.so.0.0.0
+	liburcu-common.so.8 -> liburcu-common.so.8.0.0
+	libsystemd.so.0 -> libsystemd.so.0.32.0
+	libBrokenLocale.so.1 -> libBrokenLocale.so.1
+	libnss_compat.so.2 -> libnss_compat.so.2
+	libplist-2.0.so.3 -> libplist.so.3.3.0
+	librt.so.1 -> librt.so.1
+	libxcb-xkb.so.1 -> libxcb-xkb.so.1.0.0
+	libxcb-dri2.so.0 -> libxcb-dri2.so.0.0.0
+	libatk-bridge-2.0.so.0 -> libatk-bridge-2.0.so.0.0.0
+	libaudit.so.1 -> libaudit.so.1.0.0
+	libbrotlienc.so.1 -> libbrotlienc.so.1.0.9
+	libtirpc.so.3 -> libtirpc.so.3.0.0
+	libfontenc.so.1 -> libfontenc.so.1.0.0
+	libss.so.2 -> libss.so.2.0
+	libsepol.so.2 -> libsepol.so.2
+	libxmlsec1-openssl.so.1 -> libxmlsec1-openssl.so.1.2.33
+	libexpat.so.1 -> libexpat.so.1.8.7
+	libcap-ng.so.0 -> libcap-ng.so.0.0.0
+/lib: (from <builtin>:0)
+	libdmmp.so.0.2.0 -> libdmmp.so.0.2.0
+	libmpathcmd.so.0 -> libmpathcmd.so.0
+	libmpathpersist.so.0 -> libmpathpersist.so.0
+	libhandle.so.1 -> libhandle.so.1.0.3
+	libmultipath.so.0 -> libmultipath.so.0
+$
+```
+
+这会列出如 /lib64, /usr/lib/x86_64-linux-gnu 等所有系统配置的搜索路径.
+
+2. 查看全局配置文件 (/etc/ld.so.conf)
+ld.so.cache 是怎么生成的? 它是基于全局配置文件的.
+你可以直接查看配置目录:
+
+```Bash
+cat /etc/ld.so.conf
+ls /etc/ld.so.conf.d/
+
+$ cat /etc/ld.so.conf
+include /etc/ld.so.conf.d/*.conf
+
+$ tree -a /etc/ld.so.conf.d/
+/etc/ld.so.conf.d/
+├── 000_cuda.conf
+├── 988_cuda-12.conf
+├── fakeroot-x86_64-linux-gnu.conf
+├── gds-12-4.conf
+├── libc.conf
+└── x86_64-linux-gnu.conf
+
+0 directories, 6 files
+$
+$ cat /etc/ld.so.conf.d/000_cuda.conf
+/usr/local/cuda/targets/x86_64-linux/lib
+
+$ cat /etc/ld.so.conf.d/988_cuda-12.conf
+/usr/local/cuda-12/targets/x86_64-linux/lib
+
+$ cat /etc/ld.so.conf.d/fakeroot-x86_64-linux-gnu.conf
+/usr/lib/x86_64-linux-gnu/libfakeroot
+
+$ cat /etc/ld.so.conf.d/gds-12-4.conf
+/usr/local/cuda-12.4/targets/x86_64-linux/lib
+
+$ cat /etc/ld.so.conf.d/libc.conf
+# libc default configuration
+/usr/local/lib
+
+$ cat /etc/ld.so.conf.d/x86_64-linux-gnu.conf
+# Multiarch support
+/usr/local/lib/x86_64-linux-gnu
+/lib/x86_64-linux-gnu
+/usr/lib/x86_64-linux-gnu
+$
+```
+
+研究员视角: 当你通过 .run 脚本或 apt 安装 NVIDIA 驱动时, 安装程序通常会在 /etc/ld.so.conf.d/ 目录下创建一个类似于 nvidia.conf 或 x86_64-linux-gnu_EGL.conf 的文件, 里面写明了 libcuda.so 所在的非标准路径. 如果容器内找不到库, 首先检查这个目录下有没有被正确挂载或写入配置.
+
+3. 查看环境变量 (LD_LIBRARY_PATH)
+环境变量的优先级高于全局配置文件. 这在 Docker 和 Kubernetes 中是最常用的注入手段.
+
+```Bash
+echo $LD_LIBRARY_PATH
+```
+
+Kubernetes 容器化场景深度解析:
+在 K8s 中, NVIDIA Device Plugin 往往不会去修改容器的 /etc/ld.so.conf, 而是动态地向 Pod 注入环境变量. 例如:
+LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64
+这样, 即便容器的基础镜像里没有任何 GPU 库, 只要系统将宿主机的驱动库映射到了这个目录, 程序就能优先从这里加载 libcuda.so.
+
+4. 终极调试核武器: LD_DEBUG (高级研究员必备)
+如果你发现程序报错找不到 libcuda.so, 或者加载了错误版本的 CUDA 库, 你可以让 Linux 动态链接器打印出它寻找这个库的完整心路历程.
+使用 LD_DEBUG=libs 加上你的可执行程序(例如 python 或 nvidia-smi):
+
+```Bash
+LD_DEBUG=libs python -c "import torch" 2>&1 | grep libcuda
+
+$ LD_DEBUG=libs python -c "import torch"
+    600373:	find library=libpthread.so.0 [0]; searching
+    600373:	 search path=/root/anaconda3/bin/../lib/glibc-hwcaps/x86-64-v4:/root/anaconda3/bin/../lib/glibc-hwcaps/x86-64-v3:/root/anaconda3/bin/../lib/glibc-hwcaps/x86-64-v2:/root/anaconda3/bin/../lib/tls/haswell/avx512_1/x86_64:/root/anaconda3/bin/../lib/tls/haswell/avx512_1:/root/anaconda3/bin/../lib/tls/haswell/x86_64:/root/anaconda3/bin/../lib/tls/haswell:/root/anaconda3/bin/../lib/tls/avx512_1/x86_64:/root/anaconda3/bin/../lib/tls/avx512_1:/root/anaconda3/bin/../lib/tls/x86_64:/root/anaconda3/bin/../lib/tls:/root/anaconda3/bin/../lib/haswell/avx512_1/x86_64:/root/anaconda3/bin/../lib/haswell/avx512_1:/root/anaconda3/bin/../lib/haswell/x86_64:/root/anaconda3/bin/../lib/haswell:/root/anaconda3/bin/../lib/avx512_1/x86_64:/root/anaconda3/bin/../lib/avx512_1:/root/anaconda3/bin/../lib/x86_64:/root/anaconda3/bin/../lib		(RPATH from file python)
+    600373:	  trying file=/root/anaconda3/bin/../lib/glibc-hwcaps/x86-64-v4/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/glibc-hwcaps/x86-64-v3/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/glibc-hwcaps/x86-64-v2/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/tls/haswell/avx512_1/x86_64/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/tls/haswell/avx512_1/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/tls/haswell/x86_64/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/tls/haswell/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/tls/avx512_1/x86_64/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/tls/avx512_1/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/tls/x86_64/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/tls/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/haswell/avx512_1/x86_64/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/haswell/avx512_1/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/haswell/x86_64/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/haswell/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/avx512_1/x86_64/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/avx512_1/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/x86_64/libpthread.so.0
+    600373:	  trying file=/root/anaconda3/bin/../lib/libpthread.so.0
+    600373:	 search cache=/etc/ld.so.cache
+    600373:	  trying file=/lib/x86_64-linux-gnu/libpthread.so.0
+    600373:
+    600373:	find library=libdl.so.2 [0]; searching
+    600373:	 search path=/root/anaconda3/bin/../lib		(RPATH from file python)
+    600373:	  trying file=/root/anaconda3/bin/../lib/libdl.so.2
+    600373:	 search cache=/etc/ld.so.cache
+    600373:	  trying file=/lib/x86_64-linux-gnu/libdl.so.2
+    600373:
+    600373:	find library=libutil.so.1 [0]; searching
+    600373:	 search path=/root/anaconda3/bin/../lib		(RPATH from file python)
+    600373:	  trying file=/root/anaconda3/bin/../lib/libutil.so.1
+    600373:	 search cache=/etc/ld.so.cache
+    600373:	  trying file=/lib/x86_64-linux-gnu/libutil.so.1
+    600373:
+    600373:	find library=libm.so.6 [0]; searching
+    600373:	 search path=/root/anaconda3/bin/../lib		(RPATH from file python)
+    600373:	  trying file=/root/anaconda3/bin/../lib/libm.so.6
+    600373:	 search cache=/etc/ld.so.cache
+    600373:	  trying file=/lib/x86_64-linux-gnu/libm.so.6
+    600373:
+    600373:	find library=libc.so.6 [0]; searching
+    600373:	 search path=/root/anaconda3/bin/../lib		(RPATH from file python)
+    600373:	  trying file=/root/anaconda3/bin/../lib/libc.so.6
+    600373:	 search cache=/etc/ld.so.cache
+    600373:	  trying file=/lib/x86_64-linux-gnu/libc.so.6
+    600373:
+    600373:
+    600373:	calling init: /lib64/ld-linux-x86-64.so.2
+    600373:
+    600373:
+    600373:	calling init: /lib/x86_64-linux-gnu/libc.so.6
+    600373:
+    600373:
+    600373:	calling init: /lib/x86_64-linux-gnu/libm.so.6
+    600373:
+    600373:
+    600373:	calling init: /lib/x86_64-linux-gnu/libutil.so.1
+    600373:
+    600373:
+    600373:	calling init: /lib/x86_64-linux-gnu/libdl.so.2
+    600373:
+    600373:
+    600373:	calling init: /lib/x86_64-linux-gnu/libpthread.so.0
+    600373:
+    600373:
+    600373:	initialize program: python
+    600373:
+    600373:
+    600373:	transferring control: python
+    600373:
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import torch
+ModuleNotFoundError: No module named 'torch'
+    600373:
+    600373:	calling fini: python [0]
+    600373:
+    600373:
+    600373:	calling fini: /lib/x86_64-linux-gnu/libpthread.so.0 [0]
+    600373:
+    600373:
+    600373:	calling fini: /lib/x86_64-linux-gnu/libdl.so.2 [0]
+    600373:
+    600373:
+    600373:	calling fini: /lib/x86_64-linux-gnu/libutil.so.1 [0]
+    600373:
+    600373:
+    600373:	calling fini: /lib/x86_64-linux-gnu/libm.so.6 [0]
+    600373:
+$
+```
+
+通过这个命令, 你能极其清晰地看到内核是先找了 LD_LIBRARY_PATH, 没找到后又去查了 ld.so.cache, 最终在哪个目录下命中了目标.
+
+5. 检查特定二进制文件的依赖 (ldd 和 readelf)
+有时候你想知道一个特定的程序(比如 PyTorch 的 C++ 后端库)期望从哪里加载库.
+查看依赖树:
+
+```Bash
+$ ldd /opt/conda/envs/llamafactory/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so
+	linux-vdso.so.1 (0x00007ffc0a92c000)
+	libc10.so => /opt/conda/envs/llamafactory/lib/python3.12/site-packages/torch/lib/libc10.so (0x00007ff839d35000)
+	librt.so.1 => /lib/x86_64-linux-gnu/librt.so.1 (0x00007ff839d27000)
+	libgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007ff839d07000)
+	libdl.so.2 => /lib/x86_64-linux-gnu/libdl.so.2 (0x00007ff839d02000)
+	libpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x00007ff839cfd000)
+	libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007ff839c16000)
+	libgomp.so.1 => /opt/conda/envs/llamafactory/lib/python3.12/site-packages/torch/lib/libgomp.so.1 (0x00007ff839800000)
+	libcupti.so.12 => /opt/conda/envs/llamafactory/lib/python3.12/site-packages/torch/lib/../../nvidia/cuda_cupti/lib/libcupti.so.12 (0x00007ff839092000)
+	libcudart.so.12 => /opt/conda/envs/llamafactory/lib/python3.12/site-packages/torch/lib/../../nvidia/cuda_runtime/lib/libcudart.so.12 (0x00007ff838c00000)
+	libstdc++.so.6 => /lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007ff8389d4000)
+	libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007ff8387ab000)
+	/lib64/ld-linux-x86-64.so.2 (0x00007ff84f2cd000)
+	libutil.so.1 => /lib/x86_64-linux-gnu/libutil.so.1 (0x00007ff839c0d000)
+$
+```
+
+查看硬编码路径 (RPATH/RUNPATH):
+在编译 C/C++ 程序时, 开发者可以把搜索路径"死死地"编译进二进制文件里(优先级极高).
+
+```Bash
+$ readelf -d /opt/conda/envs/llamafactory/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so
+
+Dynamic section at offset 0x14d06fd8 contains 37 entries:
+  Tag        Type                         Name/Value
+ 0x0000000000000001 (NEEDED)             Shared library: [libc10.so]
+ 0x0000000000000001 (NEEDED)             Shared library: [librt.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libdl.so.2]
+ 0x0000000000000001 (NEEDED)             Shared library: [libpthread.so.0]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgomp.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libcupti.so.12]
+ 0x0000000000000001 (NEEDED)             Shared library: [libcudart.so.12]
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [ld-linux-x86-64.so.2]
+ 0x000000000000000e (SONAME)             Library soname: [libtorch_cpu.so]
+ 0x000000000000000f (RPATH)              Library rpath: [$ORIGIN/../../nvidia/cudnn/lib:$ORIGIN/../../nvidia/nvshmem/lib:$ORIGIN/../../nvidia/nccl/lib:$ORIGIN/../../nvidia/cusparselt/lib:$ORIGIN/../../nvidia/cublas/lib:$ORIGIN/../../nvidia/cuda_cupti/lib:$ORIGIN/../../nvidia/cuda_nvrtc/lib:$ORIGIN/../../nvidia/cuda_runtime/lib:$ORIGIN/../../nvidia/cufft/lib:$ORIGIN/../../nvidia/curand/lib:$ORIGIN/../../nvidia/cusolver/lib:$ORIGIN/../../nvidia/cusparse/lib:$ORIGIN/../../cusparselt/lib:$ORIGIN/../../nvidia/nvtx/lib:$ORIGIN/../../nvidia/cufile/lib:$ORIGIN]
+ 0x000000000000000c (INIT)               0x1022000
+ 0x000000000000000d (FINI)               0x11f6bd30
+ 0x0000000000000019 (INIT_ARRAY)         0x14a67b80
+ 0x000000000000001b (INIT_ARRAYSZ)       3624 (bytes)
+ 0x000000000000001a (FINI_ARRAY)         0x14a689a8
+ 0x000000000000001c (FINI_ARRAYSZ)       16 (bytes)
+ 0x000000006ffffef5 (GNU_HASH)           0x14ea2028
+ 0x0000000000000005 (STRTAB)             0x14f1dfc0
+ 0x0000000000000006 (SYMTAB)             0x7c230
+ 0x000000000000000a (STRSZ)              5551295 (bytes)
+ 0x000000000000000b (SYMENT)             24 (bytes)
+ 0x0000000000000003 (PLTGOT)             0x14d1efe8
+ 0x0000000000000002 (PLTRELSZ)           749544 (bytes)
+ 0x0000000000000014 (PLTREL)             RELA
+ 0x0000000000000017 (JMPREL)             0xf6a5c8
+ 0x0000000000000007 (RELA)               0x7bccc8
+ 0x0000000000000008 (RELASZ)             8050944 (bytes)
+ 0x0000000000000009 (RELAENT)            24 (bytes)
+ 0x000000006ffffffe (VERNEED)            0x7bc8c8
+ 0x000000006fffffff (VERNEEDNUM)         11
+ 0x000000006ffffff0 (VERSYM)             0x795fda
+ 0x000000006ffffff9 (RELACOUNT)          237078
+ 0x0000000000000000 (NULL)               0x0
+$
+```
+
+如果输出包含 RUNPATH 或 RPATH, 系统会优先去这些硬编码的目录寻找动态库.
+
+总结: Linux 寻找动态库的优先级顺序
+作为研究人员, 记住这个 Linux 动态库加载的黄金顺序:
+
+1. RPATH(编译时硬编码在 ELF 文件中, 现已不推荐)
+2. LD_LIBRARY_PATH(环境变量, 容器化注入的核心)
+3. RUNPATH(编译时硬编码在 ELF 文件中)
+4. /etc/ld.so.cache(通过 ldconfig 刷新的全局配置, 包括 /etc/ld.so.conf.d/)
+5. 默认系统路径(/lib, /lib64, /usr/lib, /usr/lib64 等)
+
+在 GPU 驱动安装完后, 如果报找不到 .so 库的错误, 99% 的情况是因为新的库文件路径没有被加入到上述的 2 或 4 中. 执行一下 ldconfig, 或者 export LD_LIBRARY_PATH, 问题通常迎刃而解.

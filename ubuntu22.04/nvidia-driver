@@ -4,24 +4,54 @@
 set -xeu
 
 RUN_DIR=/run/nvidia
+# RUN_DIR=/run/nvidia
+# 挂载宿主机目录
+
 PID_FILE=${RUN_DIR}/${0##*/}.pid
+# PID_FILE=/run/nvidia/nvidia-driver.pid
+
 DRIVER_VERSION=${DRIVER_VERSION:?"Missing DRIVER_VERSION env"}
+# DRIVER_VERSION=580.126.20
+
 KERNEL_UPDATE_HOOK=/run/kernel/postinst.d/update-nvidia-driver
+# KERNEL_UPDATE_HOOK=/run/kernel/postinst.d/update-nvidia-driver
+
 NUM_VGPU_DEVICES=0
+# NUM_VGPU_DEVICES=0
+
 GPU_DIRECT_RDMA_ENABLED="${GPU_DIRECT_RDMA_ENABLED:-false}"
+# GPU_DIRECT_RDMA_ENABLED=false
+
 USE_HOST_MOFED="${USE_HOST_MOFED:-false}"
+# USE_HOST_MOFED=false
+
 NVIDIA_MODULE_PARAMS=()
+# NVIDIA_MODULE_PARAMS=()
+
 NVIDIA_UVM_MODULE_PARAMS=()
+# NVIDIA_UVM_MODULE_PARAMS=()
+
 NVIDIA_MODESET_MODULE_PARAMS=()
+# NVIDIA_MODESET_MODULE_PARAMS=()
+
 NVIDIA_PEERMEM_MODULE_PARAMS=()
+# NVIDIA_PEERMEM_MODULE_PARAMS=()
+
 TARGETARCH=${TARGETARCH:?"Missing TARGETARCH env"}
+# TARGETARCH=amd64
 
 OPEN_KERNEL_MODULES_ENABLED=${OPEN_KERNEL_MODULES_ENABLED:-false}
+# OPEN_KERNEL_MODULES_ENABLED=false
+
 [[ "${OPEN_KERNEL_MODULES_ENABLED}" == "true" ]] && KERNEL_TYPE=kernel-open || KERNEL_TYPE=kernel
+# KERNEL_TYPE=kernel
 
 export DEBIAN_FRONTEND=noninteractive
+# export DEBIAN_FRONTEND=noninteractive
 
 DRIVER_ARCH=${TARGETARCH/amd64/x86_64} && DRIVER_ARCH=${DRIVER_ARCH/arm64/aarch64}
+# DRIVER_ARCH=x86_64
+# DRIVER_ARCH=x86_64
 
 echo "DRIVER_ARCH is $DRIVER_ARCH"
 
@@ -30,6 +60,7 @@ _update_package_cache() {
         echo "Updating the package cache..."
         apt-get -qq update
     fi
+    # apt-get -qq update
 }
 
 _cleanup_package_cache() {
@@ -49,7 +80,12 @@ _update_ca_certificates() {
 _resolve_kernel_version() {
     local version=$(apt-cache show "linux-headers-${KERNEL_VERSION}" 2>/dev/null |
         sed -nE 's/^Version:\s+(([0-9]+\.){2}[0-9]+)[-.]([0-9]+).*/\1-\3/p' | head -1)
+    # apt-cache show linux-headers-5.15.0-173-generic | sed -nE 's/^Version:\s+(([0-9]+\.){2}[0-9]+)[-.]([0-9]+).*/\1-\3/p' | head -1
+    # local version=5.15.0-173
+
     local flavor=$(echo ${KERNEL_VERSION} | sed 's/[^a-z]*//' | grep -Ev "^generic|virtual")
+    # echo 5.15.0-173-generic | sed 's/[^a-z]*//' | grep -Ev '^generic|virtual'
+    # local flavor=
 
     echo "Resolving Linux kernel version..."
     if [ -z "${version}" ]; then
@@ -58,6 +94,8 @@ _resolve_kernel_version() {
     fi
 
     KERNEL_VERSION="${version}-${flavor:-generic}"
+    # KERNEL_VERSION=5.15.0-173-generic
+
     echo "Proceeding with Linux kernel version ${KERNEL_VERSION}"
     return 0
 }
@@ -65,31 +103,55 @@ _resolve_kernel_version() {
 # Install the kernel modules header/builtin/order files and generate the kernel version string.
 _install_prerequisites() (
     local tmp_dir=$(mktemp -d)
+    # mktemp -d
+    # local tmp_dir=/tmp/tmp.Ic9IjrBxuQ
 
     trap "rm -rf ${tmp_dir}" EXIT
+    # trap 'rm -rf /tmp/tmp.Ic9IjrBxuQ' EXIT
+
     cd ${tmp_dir}
+    # cd /tmp/tmp.Ic9IjrBxuQ
 
     rm -rf /lib/modules/${KERNEL_VERSION}
+    # rm -rf /lib/modules/5.15.0-173-generic
+
     mkdir -p /lib/modules/${KERNEL_VERSION}/proc
+    # mkdir -p /lib/modules/5.15.0-173-generic/proc
 
     echo "Installing Linux kernel headers..."
     apt-get -qq install --no-install-recommends linux-headers-${KERNEL_VERSION} >/dev/null
+    # apt-get -qq install --no-install-recommends linux-headers-5.15.0-173-generic
 
     echo "Installing Linux kernel module files..."
     apt-get -qq download linux-image-${KERNEL_VERSION} && dpkg -x linux-image*.deb .
+    # apt-get -qq download linux-image-5.15.0-173-generic
+    # dpkg -x linux-image-5.15.0-173-generic_5.15.0-173.183_amd64.deb .
+
     { apt-get -qq download linux-modules-${KERNEL_VERSION} && dpkg -x linux-modules*.deb . || true; } 2>/dev/null
+
     mv lib/modules/${KERNEL_VERSION}/modules.* /lib/modules/${KERNEL_VERSION}
+    # mv lib/modules/5.15.0-173-generic/modules.builtin lib/modules/5.15.0-173-generic/modules.builtin.modinfo lib/modules/5.15.0-173-generic/modules.order /lib/modules/5.15.0-173-generic
+
     mv lib/modules/${KERNEL_VERSION}/kernel /lib/modules/${KERNEL_VERSION}
+    # mv lib/modules/5.15.0-173-generic/kernel /lib/modules/5.15.0-173-generic
+
     depmod ${KERNEL_VERSION}
+    # depmod 5.15.0-173-generic
 
     echo "Generating Linux kernel version string..."
 
     ls -1 boot/vmlinuz-* | sed 's/\/boot\/vmlinuz-//g' - >version
+    # ls -1 boot/vmlinuz-5.15.0-173-generic | sed 's/\/boot\/vmlinuz-//g' -
+
     if [ -z "$(<version)" ]; then
         echo "Could not locate Linux kernel version string" >&2
         return 1
     fi
+
     mv version /lib/modules/${KERNEL_VERSION}/proc
+    # mv version /lib/modules/5.15.0-173-generic/proc
+
+    # rm -rf /tmp/tmp.Ic9IjrBxuQ
 )
 
 # Cleanup the prerequisites installed above.
@@ -103,34 +165,48 @@ _remove_prerequisites() {
 # Check if the kernel version requires a new precompiled driver packages.
 _kernel_requires_package() {
     local proc_mount_arg=""
+    # local proc_mount_arg=
 
     echo "Checking NVIDIA driver packages..."
     cd /usr/src/nvidia-${DRIVER_VERSION}/${KERNEL_TYPE}
+    # cd /usr/src/nvidia-580.126.20/kernel
 
     # proc_mount_arg needs to be set, to do the module match check below
     if [ -f /lib/modules/${KERNEL_VERSION}/proc/version ]; then
         proc_mount_arg="--proc-mount-point /lib/modules/${KERNEL_VERSION}/proc"
     fi
+
     for pkg_name in $(ls -d -1 precompiled/** 2>/dev/null); do
         if ! ../mkprecompiled --match ${pkg_name} ${proc_mount_arg} >/dev/null; then
             echo "Found NVIDIA driver package ${pkg_name##*/}"
             return 1
         fi
     done
+    # ls -d -1 'precompiled/**'
+
     return 0
 }
 
 # Compile the kernel modules, optionally sign them, and generate a precompiled package for use by the nvidia-installer.
 _create_driver_package() (
     local pkg_name="nvidia-modules-${KERNEL_VERSION%-*}${PACKAGE_TAG:+-${PACKAGE_TAG}}"
+    # local pkg_name=nvidia-modules-5.15.0-173
+
     local nvidia_sign_args=""
+    # local nvidia_sign_args=
+
     local nvidia_modeset_sign_args=""
+    # local nvidia_modeset_sign_args=
+
     local nvidia_uvm_sign_args=""
+    # local nvidia_uvm_sign_args=
 
     trap "make -s -j ${MAX_THREADS} SYSSRC=/lib/modules/${KERNEL_VERSION}/build clean > /dev/null" EXIT
+    # trap 'make -s -j  SYSSRC=/lib/modules/5.15.0-173-generic/build clean > /dev/null' EXIT
 
     echo "Compiling NVIDIA driver kernel modules..."
     cd /usr/src/nvidia-${DRIVER_VERSION}/${KERNEL_TYPE}
+    # cd /usr/src/nvidia-580.126.20/kernel
 
     if _gpu_direct_rdma_enabled; then
         ln -s /run/mellanox/drivers/usr/src/ofa_kernel /usr/src/
@@ -146,14 +222,23 @@ _create_driver_package() (
             fi
         fi
     fi
+    # _gpu_direct_rdma_enabled
 
     export IGNORE_CC_MISMATCH=1
+    # export IGNORE_CC_MISMATCH=1
+
     make -s -j ${MAX_THREADS} SYSSRC=/lib/modules/${KERNEL_VERSION}/build nv-linux.o nv-modeset-linux.o >/dev/null
+    # make -s -j SYSSRC=/lib/modules/5.15.0-173-generic/build nv-linux.o nv-modeset-linux.o
 
     echo "Relinking NVIDIA driver kernel modules..."
     rm -f nvidia.ko nvidia-modeset.ko
+    # rm -f nvidia.ko nvidia-modeset.ko
+
     ld -d -r -o nvidia.ko ./nv-linux.o ./nvidia/nv-kernel.o_binary
+    # ld -d -r -o nvidia.ko ./nv-linux.o ./nvidia/nv-kernel.o_binary
+
     ld -d -r -o nvidia-modeset.ko ./nv-modeset-linux.o ./nvidia-modeset/nv-modeset-kernel.o_binary
+    # ld -d -r -o nvidia-modeset.ko ./nv-modeset-linux.o ./nvidia-modeset/nv-modeset-kernel.o_binary
 
     if [ -n "${PRIVATE_KEY}" ]; then
         echo "Signing NVIDIA driver kernel modules..."
@@ -183,8 +268,15 @@ _create_driver_package() (
         --kernel-module nvidia-uvm.ko \
         ${nvidia_uvm_sign_args} \
         --target-directory .
+    # ../mkprecompiled --pack nvidia-modules-5.15.0-173 --description 5.15.0-173-generic --proc-mount-point /lib/modules/5.15.0-173-generic/proc --driver-version 580.126.20 --kernel-interface nv-linux.o --linked-module-name nvidia.ko --core-object-name nvidia/nv-kernel.o_binary --target-directory . --kernel-interface nv-modeset-linux.o --linked-module-name nvidia-modeset.ko --core-object-name nvidia-modeset/nv-modeset-kernel.o_binary --target-directory . --kernel-module nvidia-uvm.ko --target-directory .
+
     mkdir -p precompiled
+    # mkdir -p precompiled
+
     mv ${pkg_name} precompiled
+    # mv nvidia-modules-5.15.0-173 precompiled
+
+    # make -s -j SYSSRC=/lib/modules/5.15.0-173-generic/build clean
 )
 
 _assert_nvswitch_system() {
@@ -231,6 +323,8 @@ _gpu_direct_rdma_enabled() {
 #   the correct set of parameters are passed to 'modprobe'.
 _get_module_params() {
     local base_path="/drivers"
+    # local base_path=/drivers
+
     # nvidia
     if [ -f "${base_path}/nvidia.conf" ]; then
         while IFS="" read -r param || [ -n "$param" ]; do
@@ -265,10 +359,17 @@ _get_module_params() {
 _load_driver() {
     echo "Parsing kernel module parameters..."
     _get_module_params
+    # _get_module_params
 
     local nv_fw_search_path="$RUN_DIR/driver/lib/firmware"
+    # local nv_fw_search_path=/run/nvidia/driver/lib/firmware
+
     local set_fw_path="true"
+    # local set_fw_path=true
+
     local fw_path_config_file="/sys/module/firmware_class/parameters/path"
+    # local fw_path_config_file=/sys/module/firmware_class/parameters/path
+
     for param in "${NVIDIA_MODULE_PARAMS[@]}"; do
         if [[ "$param" == "NVreg_EnableGpuFirmware=0" ]]; then
             set_fw_path="false"
@@ -284,22 +385,44 @@ _load_driver() {
             echo -n "$nv_fw_search_path" >$fw_path_config_file || echo "WARNING: Failed to configure firmware search path"
         fi
     fi
+    # grep '[^[:space:]]' /sys/module/firmware_class/parameters/path
 
     echo "Loading ipmi and i2c_core kernel modules..."
     modprobe -a i2c_core ipmi_msghandler ipmi_devintf
+    # modprobe -a i2c_core ipmi_msghandler ipmi_devintf
 
     echo "Loading NVIDIA driver kernel modules..."
-    set -o xtrace +o nounset
+
+    # set -o xtrace +o nounset
+    # set -o xtrace +o nounset
+    # 仅临时关闭 nounset (即允许未定义变量/空数组), 保持 xtrace 的开启状态
+    set +o nounset  # 也可以写成 set +u
+
     modprobe nvidia "${NVIDIA_MODULE_PARAMS[@]}"
+    # modprobe nvidia
+
     modprobe nvidia-uvm "${NVIDIA_UVM_MODULE_PARAMS[@]}"
+    # modprobe nvidia-uvm
+
     modprobe nvidia-modeset "${NVIDIA_MODESET_MODULE_PARAMS[@]}"
-    set +o xtrace -o nounset
+    # modprobe nvidia-modeset
+
+    # set +o xtrace -o nounset
+    # set +o xtrace -o nounset
+    # 恢复 nounset
+    set -o nounset  # 也可以写成 set -u
 
     if _gpu_direct_rdma_enabled; then
         echo "Loading NVIDIA Peer Memory kernel module..."
-        set -o xtrace +o nounset
+        # set -o xtrace +o nounset
+        # 仅临时关闭 nounset (即允许未定义变量/空数组), 保持 xtrace 的开启状态
+        set +o nounset  # 也可以写成 set +u
+
         modprobe nvidia-peermem "${NVIDIA_PEERMEM_MODULE_PARAMS[@]}"
-        set +o xtrace -o nounset
+        # set +o xtrace -o nounset
+        # 恢复 nounset
+        set -o nounset  # 也可以写成 set -u
+
     fi
 
     echo "Starting NVIDIA persistence daemon..."
@@ -332,11 +455,23 @@ _load_driver() {
 # Stop persistenced and unload the kernel modules if they are currently loaded.
 _unload_driver() {
     local rmmod_args=()
+    # rmmod_args=()
+    # local rmmod_args
+
     local nvidia_deps=0
+    # local nvidia_deps=0
+
     local nvidia_refs=0
+    # local nvidia_refs=0
+
     local nvidia_uvm_refs=0
+    # local nvidia_uvm_refs=0
+
     local nvidia_modeset_refs=0
+    # local nvidia_modeset_refs=0
+
     local nvidia_peermem_refs=0
+    # local nvidia_peermem_refs=0
 
     echo "Stopping NVIDIA persistence daemon..."
     if [ -f /var/run/nvidia-persistenced/nvidia-persistenced.pid ]; then
@@ -419,19 +554,26 @@ _unload_driver() {
 # Link and install the kernel modules from a precompiled package using the nvidia-installer.
 _install_driver() {
     local install_args=()
+    # install_args=()
+    # local install_args
 
     echo "Installing NVIDIA driver kernel modules..."
     cd /usr/src/nvidia-${DRIVER_VERSION}
+    # cd /usr/src/nvidia-580.126.20
+
     if [ -d /lib/modules/${KERNEL_VERSION}/kernel/drivers/video ]; then
         rm -rf /lib/modules/${KERNEL_VERSION}/kernel/drivers/video
     else
         rm -rf /lib/modules/${KERNEL_VERSION}/video
     fi
+    # rm -rf /lib/modules/5.15.0-173-generic/kernel/drivers/video
 
     if [ "${ACCEPT_LICENSE}" = "yes" ]; then
         install_args+=("--accept-license")
     fi
     nvidia-installer --kernel-module-only --no-drm --ui=none --no-nouveau-check -m=${KERNEL_TYPE} ${install_args[@]+"${install_args[@]}"}
+    # nvidia-installer --kernel-module-only --no-drm --ui=none --no-nouveau-check -m=kernel
+
 }
 
 # Mount the driver rootfs into the run directory with the exception of sysfs.
@@ -449,6 +591,7 @@ _unmount_rootfs() {
     if findmnt -r -o TARGET | grep "${RUN_DIR}/driver" >/dev/null; then
         umount -l -R ${RUN_DIR}/driver
     fi
+    # findmnt -r -o TARGET | grep /run/nvidia/driver
 }
 
 # Write a kernel postinst.d script to automatically precompile packages on kernel update (similar to DKMS).
@@ -543,22 +686,39 @@ init() {
         mkdir -p /usr/src/nvidia-${DRIVER_VERSION} &&
         mv LICENSE mkprecompiled ${KERNEL_TYPE} /usr/src/nvidia-${DRIVER_VERSION} &&
         sed '9,${/^\(kernel\|LICENSE\)/!d}' .manifest >/usr/src/nvidia-${DRIVER_VERSION}/.manifest
+    # sh NVIDIA-Linux-x86_64-580.126.20.run -x
+    # cd NVIDIA-Linux-x86_64-580.126.20
+    # ./nvidia-installer --silent --no-kernel-module --no-nouveau-check --no-nvidia-modprobe --no-rpms --no-backup --no-check-for-alternate-installs --no-libglx-indirect --no-install-libglvnd --x-prefix=/tmp/null --x-module-path=/tmp/null --x-library-path=/tmp/null --x-sysconfig-path=/tmp/null
+    # mkdir -p /usr/src/nvidia-580.126.20
+    # mv LICENSE mkprecompiled kernel /usr/src/nvidia-580.126.20
+    # sed '9,${/^\(kernel\|LICENSE\)/!d}' .manifest
 
     echo -e "\n========== NVIDIA Software Installer ==========\n"
     echo -e "Starting installation of NVIDIA driver version ${DRIVER_VERSION} for Linux kernel version ${KERNEL_VERSION}\n"
 
     exec 3>${PID_FILE}
+    # exec
+
     if ! flock -n 3; then
         echo "An instance of the NVIDIA driver is already running, aborting"
         exit 1
     fi
+    # flock -n 3
+
     echo $$ >&3
+    # echo 42816
 
     trap "echo 'Caught signal'; exit 1" HUP INT QUIT PIPE TERM
+    # trap 'echo '\''Caught signal'\''; exit 1' HUP INT QUIT PIPE TERM
+
     trap "_shutdown" EXIT
+    # trap _shutdown EXIT
 
     _unload_driver || exit 1
+    # _unload_driver
+
     _unmount_rootfs
+    # _unmount_rootfs
 
     if _kernel_requires_package; then
         _update_ca_certificates
@@ -569,9 +729,18 @@ init() {
         #_remove_prerequisites
         #_cleanup_package_cache
     fi
+    # _kernel_requires_package
+    # _update_package_cache
+    # _resolve_kernel_version
+    # _install_prerequisites
+    # _create_driver_package
 
     _install_driver
+    # _install_driver
+
     _load_driver || exit 1
+    # _load_driver
+
     _mount_rootfs
     _write_kernel_update_hook
 
@@ -694,8 +863,12 @@ EOF
 if [ $# -eq 0 ]; then
     usage
 fi
+
 command=$1
+# command=init
+
 shift
+
 case "${command}" in
 init) options=$(getopt -l accept-license,max-threads: -o am: -- "$@") ;;
 update) options=$(getopt -l kernel:,sign:,tag:,max-threads: -o k:s:t:m: -- "$@") ;;
@@ -703,16 +876,32 @@ reload_nvidia_peermem) options="" ;;
 probe_nvidia_peermem) options="" ;;
 *) usage ;;
 esac
+# getopt -l accept-license,max-threads: -o am: --
+# options=' --'
+
 if [ $? -ne 0 ]; then
     usage
 fi
+
 eval set -- "${options}"
+# eval set -- ' --'
+# set -- --
 
 ACCEPT_LICENSE=""
+# ACCEPT_LICENSE=
+
 MAX_THREADS=""
+# MAX_THREADS=
+
 KERNEL_VERSION=$(uname -r)
+# uname -r
+# KERNEL_VERSION=5.15.0-173-generic
+
 PRIVATE_KEY=""
+# PRIVATE_KEY=
+
 PACKAGE_TAG=""
+# PACKAGE_TAG=
 
 for opt in ${options}; do
     case "$opt" in
@@ -742,8 +931,14 @@ for opt in ${options}; do
         ;;
     esac
 done
+# for opt in ${options}
+#     case "$opt" in
+#         shift
+#         break
+
 if [ $# -ne 0 ]; then
     usage
 fi
 
 $command
+# init

@@ -1,0 +1,1805 @@
+#! /bin/bash
+# Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+
+set -eu
+# set -e: 遇到错误立即退出; set -u: 变量未定义报错. 保证脚本健壮性.
+
+RUN_DIR=/run/nvidia
+# 定义驱动运行状态目录
+# 含义: 指定一个目录用来存储驱动安装过程中产生的临时状态文件、锁文件或 socket.
+# 作用: 在云原生环境下, 这个目录通常会被挂载为宿主机的 hostPath(如 /run/nvidia),
+#      以便宿主机上的其他组件(如 Kubelet 或 Device Plugin)能够感知驱动的运行状态.
+
+PID_FILE=${RUN_DIR}/${0##*/}.pid
+# 定义进程 ID (PID) 文件的完整路径
+# 含义: 利用 Shell 的参数扩展功能, 生成一个以当前脚本名称命名的 .pid 文件路径.
+# 表达式解析:
+#   $0: 代表当前执行的脚本完整路径(例如 /usr/bin/nvidia-driver).
+#   ##: 是 Shell 的通配符删除操作, 表示从变量开头删除最长匹配模式.
+#   */: 匹配最后一个斜杠及其之前的所有字符.
+#   ${0##*/}: 最终提取出脚本的文件名部分(即 nvidia-driver).
+# 最终结果: PID_FILE=/run/nvidia/nvidia-driver.pid
+
+# 为什么要这么写? (深度设计意图)
+# 作为高级研究人员, 我们需要从健壮性、标准化和容器-宿主机交互三个维度来理解这种写法:
+# 1. 遵循 Linux 标准层次结构 (FHS)
+# 在 Linux 中, /run 目录(以前是 /var/run)是标准的 tmpfs(内存文件系统), 专门用于存放系统启动以来的运行时信息.
+# 设计理由: 驱动安装是一个高频触发且对状态敏感的操作. 使用 /run 保证了即使系统异常崩溃, 重启后这些状态文件会自动消失(内存文件系统特性), 不会留下残余的"假状态"导致下次启动失败.
+# 2. 实现"单例模式"(Singleton Pattern)与互斥
+# 驱动程序直接操作底层硬件资源, 绝对不允许两个安装程序同时运行, 否则会导致内核符号冲突或硬件寄存器竞争.
+# 设计理由: 脚本随后会利用这个 PID_FILE 配合 flock(文件锁)或直接检查 PID 状态. 通过硬编码文件名(如 nvidia-driver.pid), 脚本可以确保: 如果文件已存在且对应的进程正在运行, 新的安装请求会立即退出, 从而实现幂等性(Idempotency).
+# 3. 巧妙的自引用与解耦 (${0##*/})
+# 这种写法比直接写 PID_FILE=/run/nvidia/nvidia-driver.pid 高级得多.
+# 设计理由:
+# 代码复用性: 如果 NVIDIA 将来把这个脚本重命名为 nvidia-driver-manager 或者你为了调试复制了一份叫 test-driver, 代码无需修改, 它会自动生成对应的 test-driver.pid.
+# 避免硬编码错误: 手动输入长字符串容易出错, 利用 Shell 变量提取确保了 PID 文件名与脚本执行实体永远保持逻辑一致.
+# 4. 云原生中的跨命名空间感知(Host-to-Container Bridge)
+# 在 Kubernetes 中, 这个容器通常以 privileged: true 运行, 并把宿主机的 /run/nvidia 挂载到容器内部.
+# 设计理由:
+# 监控告警: 宿主机上的监控插件(如 Prometheus Node Exporter)可以通过检查 /run/nvidia/nvidia-driver.pid 是否存在来判断驱动容器是否存活.
+# 生命周期钩子: 脚本中后续的 update 逻辑会通过读取这个 PID 文件, 定位到正在运行的驱动进程, 然后通过 nsenter 进入其命名空间执行热更新.
+# 总结
+# 这两行代码是工业级 Shell 脚本的标准模版. 它不仅解决了"我在哪"和"我是谁"的问题, 还通过 Linux 内置的变量处理机制, 为后续的进程加锁、状态监控和容器间协作打下了坚实的基础. 这是构建高可用 GPU 基础设施(Infrastructure as Software)的典型做法.
+
+DRIVER_VERSION=${DRIVER_VERSION:?"Missing DRIVER_VERSION env"}
+# --- 1. 强制环境变量校验 ---
+# 含义: 检查 DRIVER_VERSION 是否存在.
+# 语法解析: ${VAR:?"ErrorMessage"} 是 Shell 的参数扩展, 如果变量为空或未定义, 脚本会打印错误并立即退出.
+# 为什么要这么写: 驱动版本是整个流程的核心. 在 K8s 中, 这通常由 Helm Chart 或 Operator 传入.
+# 如果不校验直接运行, 后续下载驱动包会因路径错误导致不可预知的失败.
+
+KERNEL_UPDATE_HOOK=/run/kernel/postinst.d/update-nvidia-driver
+# --- 2. 内核更新钩子路径 ---
+# 含义: 定义一个存放内核更新触发脚本的路径.
+# 为什么要这么写: 在 K8s 宿主机上, 如果系统自动更新了内核, 原有的 GPU 驱动模块会失效.
+# 这个路径通常会被挂载到宿主机的 /etc/kernel/postinst.d/. 当新内核安装时,
+# 它会自动触发容器重新编译驱动模块, 实现类似 DKMS 的自动适配能力.
+
+NUM_VGPU_DEVICES=0
+# --- 3. 特性开关初始化 ---
+# 初始化 vGPU 设备计数, 默认 0. 用于 GRID/vGPU 虚拟化场景.
+
+GPU_DIRECT_RDMA_ENABLED="${GPU_DIRECT_RDMA_ENABLED:-false}"
+# GPUDirect RDMA 开关.
+# 为什么要这么写: 在高性能计算(HPC)和分布式深度训练(如 NCCL)中,
+# 该特性允许 GPU 直接通过网卡(Infiniband)传输数据, 跳过 CPU 拷贝, 显著降低延迟.
+# 这行代码使用的是 Bash 的 "参数扩展(Parameter Expansion)" 特性, 具体来说是 "设置默认值" 的写法.
+# 1. 语法拆解
+# 其标准格式为: ${变量名:-默认值}
+# GPU_DIRECT_RDMA_ENABLED: 这是你想要检查的变量名.
+# ":-": 这是操作符. 它的逻辑是: 如果左边的变量未定义或者值为空字符串, 则使用右边的值.
+# false: 这是预设的默认值.
+# 2. 逻辑流转
+# 这行代码 GPU_DIRECT_RDMA_ENABLED="${GPU_DIRECT_RDMA_ENABLED:-false}" 执行时的实际逻辑如下:
+# 情况	输入情况	结果
+# 情况 A	用户在 K8s 环境变量中设置了 GPU_DIRECT_RDMA_ENABLED=true	变量保持为 true
+# 情况 B	用户根本没传这个环境变量(变量未定义)	变量被赋值为 false
+# 情况 C	用户定义了变量但没写值(例如 GPU_DIRECT_RDMA_ENABLED="")	变量被赋值为 false
+# 3. 为什么要这么写? (研究员视角)
+# 在构建 GPU 驱动容器这种复杂的系统级工具时, 这种写法有三个核心目的:
+# A. 增强脚本的"健壮性"(Robustness)
+# 你注意到脚本开头通常有 set -u (或者 set -eu).
+# set -u 的作用是: 一旦遇到未定义的变量, 脚本会立即报错并退出.
+# 如果直接使用 $GPU_DIRECT_RDMA_ENABLED 而用户没传, 脚本会直接挂掉.
+# 使用 ${VAR:-default} 这种写法, 可以优雅地规避未定义变量引发的错误.
+# B. 声明式配置的实现
+# 在 Kubernetes 的 YAML 文件中, 我们往往只关注需要开启的特性.
+# 设计原则: 安全起见, 高级特性(如 RDMA、Fabric Manager)默认应该是关闭的.
+# 通过这种写法, 开发者可以确保: "除非用户显式要求开启, 否则我们默认执行最安全的关闭逻辑."
+# C. 代码的简洁性
+# 如果不使用这种写法, 你可能需要写 4 行代码来实现同样的功能:
+
+# if [ -z "$GPU_DIRECT_RDMA_ENABLED" ]; then
+#     GPU_DIRECT_RDMA_ENABLED="false"
+# fi
+
+# 而在处理几十个驱动配置参数(如 NVIDIA_UVM_MODULE_PARAMS 等)时, 使用一行短小精悍的参数扩展明显更易于维护.
+
+# 4. 进阶对比(冷知识)
+# Bash 还有一种非常相似的写法: ${GPU_DIRECT_RDMA_ENABLED-false} (少了冒号).
+# ${VAR:-false} (有冒号): 如果 VAR 不存在 或 为空, 都返回 false.
+# ${VAR-false} (无冒号): 只有当 VAR 完全不存在 时才返回 false; 如果 VAR 存在但为空字符串, 它会返回空字符串.
+# 专家建议: 在处理驱动容器环境变量时, 务必使用带冒号的 :-. 因为在 K8s 的 ENV 配置中, 用户很容易不小心留下一个空字符串, 如果不带冒号, 脚本可能会带着空值进入后续的判断逻辑, 导致 modprobe 命令因参数非法而报错.
+
+USE_HOST_MOFED="${USE_HOST_MOFED:-false}"
+# 是否使用宿主机预装的 Mellanox OFED (网络驱动).
+
+NVIDIA_MODULE_PARAMS=()         # 核心模块 (nvidia.ko)
+NVIDIA_UVM_MODULE_PARAMS=()     # 统一内存模块 (nvidia-uvm.ko)
+NVIDIA_MODESET_MODULE_PARAMS=() # 显示模式设置模块 (nvidia-modeset.ko)
+NVIDIA_PEERMEM_MODULE_PARAMS=() # 用于 RDMA 的对等内存模块 (nvidia-peermem.ko)
+# --- 4. 内核模块参数数组 ---
+# 定义四个空数组, 分别存储不同内核模块的加载参数.
+# 为什么要这么写: 使用数组而非字符串可以安全地处理带空格的参数.
+# 这些参数允许用户通过环境变量微调驱动行为(例如: 限制显存、开启特定调试模式).
+
+TARGETARCH=${TARGETARCH:?"Missing TARGETARCH env"}
+# --- 5. 目标架构校验 ---
+# 含义: 校验容器运行的 CPU 架构(amd64 或 arm64).
+# 为什么要这么写: 这是为了支持多架构(Multi-Arch)镜像. NVIDIA 驱动安装包在
+# x86_64 和 aarch64 上是完全不同的二进制文件.
+
+OPEN_KERNEL_MODULES_ENABLED=${OPEN_KERNEL_MODULES_ENABLED:-false}
+[[ "${OPEN_KERNEL_MODULES_ENABLED}" == "true" ]] && KERNEL_TYPE=kernel-open || KERNEL_TYPE=kernel
+# --- 6. 开源内核模块开关选择 ---
+# 含义: 判断是否开启 NVIDIA Open Kernel Modules (从 R515 驱动开始支持).
+# 为什么要这么写: NVIDIA 提供了"闭源"和"开源"两种内核模块. 开源版对最新的
+# Turing/Ampere+ 架构支持更好, 且更符合 Linux 内核社区的偏好.
+# 这里根据开关切换 KERNEL_TYPE, 决定后续去哪个目录下寻找源码.
+
+export DEBIAN_FRONTEND=noninteractive
+# --- 7. 系统环境变量设置 ---
+# 含义: 告知 Debian/Ubuntu 系包管理器(apt)当前为非交互模式.
+# 为什么要这么写: 容器在 init 过程中可能需要 apt-get 安装编译依赖(gcc, make).
+# 设置此变量防止安装过程中弹出蓝色确认框, 导致容器启动卡死.
+
+DRIVER_ARCH=${TARGETARCH/amd64/x86_64} && DRIVER_ARCH=${DRIVER_ARCH/arm64/aarch64}
+# --- 8. 架构名称标准化映射 ---
+# 含义: 将 Kubernetes 标准的架构名转换为 NVIDIA 驱动包命名的格式.
+# 逻辑: 如果是 amd64 替换为 x86_64; 如果是 arm64 替换为 aarch64.
+# 为什么要这么写: 这是云原生与底层硬件命名的桥梁. K8s/Docker 喜欢用 Go 风格的架构命名,
+# 而 Linux 驱动包遵循历史悠久的 GNU/Linux 命名习惯. 不转换则无法找到下载路径.
+# 这行代码展示了 Bash 中非常高效的 字符串替换(String Substitution) 技巧.
+# 它的核心作用是将 云原生生态(Docker/Kubernetes)的架构命名习惯 翻译成 Linux 内核/NVIDIA 驱动的架构命名习惯.
+# 1. 语法拆解: ${变量/旧字符串/新字符串}
+# 这是 Bash 的参数扩展(Parameter Expansion)功能, 用于对字符串进行搜索和替换.
+# 语法格式: ${VARIABLE/PATTERN/REPLACEMENT}
+# 含义: 在变量 VARIABLE 中搜索匹配 PATTERN 的内容, 并将其替换为 REPLACEMENT.
+# 注意: 这里的 / 表示只替换第一次匹配到的内容(如果是 // 则表示全局替换).
+# 2. 这行代码的具体逻辑流程
+# 这行代码其实由两个步骤组成, 通过 &&(逻辑与, 表示前一个成功后再执行后一个)连接:
+# 第一步: 处理 x86 架构
+# DRIVER_ARCH=${TARGETARCH/amd64/x86_64}
+# 输入: 假设你在典型的 Intel 或 AMD 服务器上运行, Kubernetes 会传入 TARGETARCH=amd64.
+# 操作: 查找字符串中的 amd64 并将其替换为 x86_64.
+# 结果: 此时 DRIVER_ARCH 的值为 x86_64.
+# 第二步: 处理 ARM 架构
+# DRIVER_ARCH=${DRIVER_ARCH/arm64/aarch64}
+# 输入: 此时 DRIVER_ARCH 的值是上一步的结果.
+# 操作: 如果 DRIVER_ARCH 中包含 arm64(例如在 NVIDIA Grace Hopper 或 AWS Graviton 节点上), 则将其替换为 aarch64.
+# 结果: 此时 DRIVER_ARCH 的最终值被修正.
+# 3. 研究员视角: 为什么要这么写?
+# 作为一名高级研究员, 你需要明白这行代码背后隐藏的多架构(Multi-Arch)兼容性挑战.
+# A. 消除"语言障碍"
+# 在 GPU 计算领域, 不同的标准化组织对同一套硬件有不同的叫法, 这会导致脚本找不到文件:
+# 硬件平台	云原生/Go 语言标准 (TARGETARCH)	NVIDIA/Linux 驱动标准 (DRIVER_ARCH)
+# 64位 Intel/AMD	amd64	x86_64
+# 64位 ARM (Apple/Ampere)	arm64	aarch64
+# 如果你不进行这个转换, 脚本去下载驱动时会尝试访问类似 NVIDIA-Linux-amd64-575.run 的路径, 而 NVIDIA 服务器上实际存储的文件名是 NVIDIA-Linux-x86_64-575.run. 下载会直接 404 报错.
+# B. 链式赋值的简洁性
+# 使用 && 连接两行赋值, 可以确保这两次架构转换逻辑是一个原子操作:
+# 如果 TARGETARCH 是 amd64, 第一步生效, 第二步虽然执行但找不到 arm64, 所以不产生变化.
+# 如果 TARGETARCH 是 arm64, 第一步不产生变化, 第二步生效.
+# 最终结果: 无论在哪种主流架构上, 都能得到 NVIDIA 驱动安装包识别的正确字符串.
+# C. 为什么不用 if...else?
+# 作为研究员, 我们追求代码的紧凑性(Conciseness).
+# 使用 if [ "$TARGETARCH" = "amd64" ]... 会让脚本变得臃肿(大约需要 8-10 行). 使用参数扩展配合链式操作, 一行代码就能搞定多架构适配.
+# 总结
+# 这行代码的本质是一个 "架构翻译机". 它确保了无论你的 Kubernetes 集群是基于传统的 x86 还是新兴的 ARM 架构, gpu-driver-container 都能精准定位到对应的二进制驱动安装包.
+
+echo "DRIVER_ARCH is $DRIVER_ARCH"
+
+# 研究员视角的深度解析: 为什么要这么写?
+# 从架构设计角度看, 这段代码体现了 "Container as an Installer" (容器即安装程序) 的三个核心设计原则:
+# 容错性与幂等性:
+# 开头的 ${VAR:?"..."} 是一种强制约束. 在 K8s 中, Pod 可能在任何时候重启. 这种写法确保了如果环境配置不完整(如 ConfigMap 没挂载对), 程序会立即崩溃并上报状态, 而不是带着错误配置运行, 导致显卡处于不可用的半安装状态.
+# 高性能计算(HPC)意识:
+# 代码中专门预留了 GPU_DIRECT_RDMA 和 NVIDIA_PEERMEM 的初始化. 这说明该镜像不仅仅是为了简单的"能显示", 而是为了支撑 Kubernetes 上的 大模型训练 (LLM Training). 在大模型场景下, RDMA 的配置极其复杂且容易出错, 通过容器脚本自动化处理这些内核参数, 极大降低了运维难度.
+# 架构解耦 (Multi-Arch Support):
+# 最后几行对 TARGETARCH 的处理, 说明 NVIDIA 的目标是维护一套代码来支持多种硬件体系. 无论是传统的 Intel/AMD, 还是像 NVIDIA Grace Hopper (ARM64) 这样的新型超级计算机, 都可以引用同一个脚本逻辑, 这体现了极高的代码复用性和可维护性.
+# 内核态与用户态的分离:
+# 注意 KERNEL_TYPE 的逻辑. 通过 kernel-open 的判断, 脚本为用户提供了选择: 你是想要更稳定的传统驱动, 还是想要完全符合 GPL 协议、能更好集成进 Linux 内核的开源版本. 这种灵活性是企业级生产环境必须具备的.
+# 总结建议:
+# 如果你在调试过程中发现驱动无法安装, 首先应该检查 TARGETARCH 和 DRIVER_VERSION 环境变量. 如果是在做跨节点的大规模训练集群, 请务必关注 GPU_DIRECT_RDMA_ENABLED 是否设置正确, 因为这直接决定了你的集群性能上限.
+
+# --- 函数 1: 更新包管理器缓存 ---
+_update_package_cache() {
+    # 逻辑: 检查环境变量 PACKAGE_TAG. 如果它不等于 "builtin"(内置), 则执行更新.
+    # 这里的 ${PACKAGE_TAG:-} 是一种防御性写法, 防止变量未定义时脚本报错.
+    if [ "${PACKAGE_TAG:-}" != "builtin" ]; then
+        echo "Updating the package cache..."
+        # -qq 表示 "quite quiet", 除了错误信息外不输出任何内容.
+        # 作用: 从互联网(Ubuntu/Debian 镜像源)拉取最新的软件包列表.
+        apt-get -qq update
+    fi
+}
+
+# --- 函数 2: 清理包管理器缓存 ---
+_cleanup_package_cache() {
+    # 逻辑: 同样判断是否为非内置模式.
+    if [ "${PACKAGE_TAG:-}" != "builtin" ]; then
+        echo "Cleaning up the package cache..."
+        # 彻底删除 /var/lib/apt/lists/ 下的所有索引文件.
+        # 作用: 释放容器可写层(Writable Layer)占用的磁盘空间.
+        rm -rf /var/lib/apt/lists/*
+    fi
+}
+
+# --- 函数 3: 更新根证书 ---
+_update_ca_certificates() {
+    # 逻辑: 检查 /usr/local/share/ca-certificates 目录是否为空.
+    # [ ! -z "$(ls -A ...)" ] 表示如果该目录下有任何文件(包括隐藏文件), 则返回真.
+    if [ ! -z "$(ls -A /usr/local/share/ca-certificates)" ]; then
+        # 作用: 将用户自定义的证书导入系统信任库.
+        update-ca-certificates
+    fi
+}
+
+# 研究员视角: 为什么要这么写? (深度设计意图)
+# 作为高级研究员, 我们需要从 "镜像策略"、"网络安全" 和 "资源效率" 三个维度来理解这些逻辑.
+# 1. "Thin Image" vs "Fat Image" 策略
+# 代码背景: if [ "$PACKAGE_TAG" != "builtin" ].
+# 为什么要这么写:
+# 瘦镜像(Thin Image): 为了让镜像尽量小, NVIDIA 默认不会在镜像里预装成百上千个内核头文件(kernel-headers). 容器启动后, 它发现自己是"瘦镜像", 于是调用 _update_package_cache 去公网下载与当前宿主机内核匹配的头文件进行编译.
+# 胖镜像(Fat Image/Builtin): 在某些离线(Air-gapped)的数据中心, 无法连接公网. 运维人员会构建一个包含所有预需包的镜像, 并设置 PACKAGE_TAG=builtin. 此时, 脚本会跳过 apt-get update, 避免因无法联网而导致容器启动失败.
+# 2. 企业级网络安全(Private CA)
+# 代码背景: _update_ca_certificates.
+# 为什么要这么写:
+# 在大规模 Kubernetes 集群中, 许多公司会使用私有镜像仓库或受控的 HTTPS 代理.
+# 如果驱动容器需要从公司内部源下载 kernel-headers 或 gcc, 而这些内部源使用的是私有证书, apt-get 会因为无法验证证书而报错.
+# 设计精妙之处: 该逻辑允许运维人员通过 K8s 的 ConfigMap 将公司私有证书挂载到容器的 /usr/local/share/ca-certificates 路径下. 脚本检测到证书后自动更新系统信任库, 确保后续的下载流程畅通无阻.
+# 3. 容器"镜像卫生"与资源回收
+# 代码背景: _cleanup_package_cache 中的 rm -rf /var/lib/apt/lists/*.
+# 为什么要这么写:
+# apt-get update 产生的索引文件通常会有几十到上百 MB.
+# 虽然驱动容器通常作为 DaemonSet 长期运行, 但它在完成编译加载驱动后, 这些索引文件就变成了死重.
+# 清理这些文件可以减少容器对宿主机磁盘空间的占用, 尤其是在磁盘空间紧缺(Disk Pressure)的生产集群中, 这是一个非常好的运维实践.
+# 4. 这里的 -qq 是为了什么?
+# 设计理由:
+# 在 Kubernetes 中, 所有 Pod 的 stdout 都会被日志收集系统(如 ELK, Fluentd)采集.
+# 普通的 apt-get update 会输出海量的进度信息(从 0% 到 100%). 如果集群有 1000 个节点, 同时启动驱动容器产生的日志垃圾是非常惊人的. 使用 -qq 能够保持 K8s 日志的整洁, 只记录关键的错误信息.
+# 总结
+# 这几段代码展示了 NVIDIA GPU Operator 如何处理"环境不可知性". 它既能适应公网下载的灵活性, 又能兼顾离线环境的稳定性, 同时还考虑到了企业级安全(自定义证书)和系统轻量化.
+# 研究员建议:
+# 如果你在内网环境使用此镜像, 请务必关注 PACKAGE_TAG 的设置, 并确保你的私有证书已通过 VolumeMount 正确放置, 否则 apt-get 下载编译依赖时将会是你遇到的第一个拦路虎.
+
+# Resolve the kernel version to the form major.minor.patch-revision-flavor where flavor defaults to generic.
+_resolve_kernel_version() {
+    # 1. 提取软件包版本 (version)
+    # 逻辑: 查询本地 apt 缓存中对应内核头文件的元数据.
+    # 语法解析:
+    #   apt-cache show ... : 查看包的具体信息(包含 Version 字段).
+    #   sed -nE ... : 使用扩展正则表达式匹配 Version 行.
+    #   (([0-9]+\.){2}[0-9]+) : 匹配主版本号, 如 "5.15.0".  (分组 1)
+    #   [-.]([0-9]+) : 匹配修订版本号, 如 "-101".  (分组 3)
+    #   \1-\3 : 将其重新组合成 "5.15.0-101" 这种标准格式.
+    local version=$(apt-cache show "linux-headers-${KERNEL_VERSION}" 2>/dev/null |
+        sed -nE 's/^Version:\s+(([0-9]+\.){2}[0-9]+)[-.]([0-9]+).*/\1-\3/p' | head -1)
+
+    # 2. 提取内核变体/风味 (flavor)
+    # 逻辑: 从原始 KERNEL_VERSION(通常是 uname -r 的结果)中提取后缀名.
+    # 语法解析:
+    #   sed 's/[^a-z]*//' : 删掉所有非字母字符. 例如 "5.15.0-101-aws" 变成 "aws".
+    #   grep -Ev "^generic|virtual" : 过滤掉 generic 和 virtual.
+    # 为什么要这么做: 在 Debian/Ubuntu 系中, generic 是默认值,
+    # 而特殊的内核(如 -aws, -gcp, -azure)需要在包名中显式指出来.
+    local flavor=$(echo ${KERNEL_VERSION} | sed 's/[^a-z]*//' | grep -Ev "^generic|virtual")
+
+    echo "Resolving Linux kernel version..."
+
+    # 3. 错误检查
+    # 如果 version 为空, 说明 apt 仓库里找不到对应的内核头文件.
+    if [ -z "${version}" ]; then
+        echo "Could not resolve Linux kernel version" >&2
+        return 1
+    fi
+
+    # 4. 重新构造 KERNEL_VERSION 变量
+    # 将提取的版本号和变体拼接. 如果 flavor 为空, 则默认使用 generic.
+    # 最终结果可能是: 5.15.0-101-generic 或 5.15.0-101-aws
+    KERNEL_VERSION="${version}-${flavor:-generic}"
+    echo "Proceeding with Linux kernel version ${KERNEL_VERSION}"
+    return 0
+}
+# 在 Kubernetes 环境下, 容器化驱动安装最大的挑战就是 "环境不一致性".
+# 宿主机的内核版本(uname -r)千差万别, 而驱动编译必须依赖完全匹配的内核头文件(Kernel Headers).
+# 这个函数的作用就是: 将 Linux 运行时的模糊内核版本号, "翻译"成包管理器(apt)能够精准识别的软件包版本字符串.
+# 研究员视角的深度解析: 为什么要这么写?
+# 作为研究员, 我必须指出这几行代码解决了 Linux 运维中的三个"巨坑":
+# 1. 解决 uname -r 与软件包版本的"断裂"
+# 在 Ubuntu/Debian 系统中, uname -r 命令返回的结果(如 5.15.0-101-generic)往往直接对应内核版本, 但 apt 仓库里的 linux-headers 软件包版本号可能更复杂.
+# 例如, 内核包的版本可能是 5.15.0-101.111, 其对应的头文件路径也需要精确匹配.
+# 如果直接用 uname -r 去安装, 可能会出现 E: Unable to locate package.
+# 设计逻辑: 通过 apt-cache show 先探测仓库里"真相", 再进行字符串重组, 确保了后续 apt-get install 100% 成功.
+# 2. 处理云厂商的定制化内核(Cloud Flavor)
+# 如果你在 AWS (EC2)、Azure 或 GCP 上运行 Kubernetes:
+# 它们的内核通常带后缀, 如 5.15.0-1052-aws.
+# 这些内核的驱动编译路径与标准版不同.
+# 代码意图: 变量 flavor 的提取逻辑确保了脚本能识别出你在用 AWS 或 Azure 的特殊内核, 从而下载正确的头文件. 过滤掉 generic 和 virtual 是因为在 Ubuntu 逻辑中, 这两个通常是默认处理, 不需要作为特殊标识.
+# 3. 正则表达式的严谨性((([0-9]+\.){2}[0-9]+))
+# 这个正则非常考究. 它强制匹配 X.Y.Z 格式.
+# 为什么要这么写: 内核版本号的修订位(Revision)在不同的发行版里格式不一(有的用点, 有的用横线). 通过这种正则提取后再用 \1-\3(即 版本-修订号)重新标准化, 抹平了不同发行版元数据描述的差异, 为后面的 nvidia-installer 提供了一个标准化的路径输入.
+# 4. 失败前置: 避免半路崩盘
+# 驱动安装最怕执行到一半(比如已经开始编译了)发现头文件找不到.
+# 设计意图: 在正式安装前调用这个函数进行检测. 如果 if [ -z "${version}" ] 触发, 容器会立即报错退出(CrashLoopBackOff). 在 Kubernetes 中, 这比容器一直运行但驱动其实没装好(导致业务 Pod 无法调用 GPU)要好得多.
+# 总结建议
+# 这段代码体现了 "环境探测优先" 的原则. 在 Kubernetes 大规模集群中, 节点内核版本漂移是常态. 通过这套逻辑, NVIDIA 驱动容器能够像"变色龙"一样自动适应宿主机的内核微差异, 这正是 GPU Operator 能够实现全自动化的核心技术点之一.
+
+# Install the kernel modules header/builtin/order files and generate the kernel version string.
+# 注意: 这里使用的是 () 而不是 {}, 这意味着函数在"子 Shell (Subshell)"中运行.
+# 为什么要这么写: 子 Shell 中的 cd、环境变量修改在函数退出后会自动还原, 不会污染主进程.
+_install_prerequisites() (
+    # 1. 创建并进入临时工作目录
+    local tmp_dir=$(mktemp -d)
+
+    # 设定钩子: 无论脚本执行成功还是失败, 退出时自动删除临时目录.
+    trap "rm -rf ${tmp_dir}" EXIT
+    cd ${tmp_dir}
+
+    # 2. 清理并初始化内核模块目录
+    # 路径: /lib/modules/<内核版本> 是 Linux 存放驱动(.ko)的标准路径.
+    rm -rf /lib/modules/${KERNEL_VERSION}
+    # 创建一个特殊的 proc 目录.
+    # 为什么要这么写: NVIDIA 安装程序会检查 /proc/version. 在容器内, 我们需要伪造这个结构.
+    mkdir -p /lib/modules/${KERNEL_VERSION}/proc
+
+    # 3. 安装内核头文件 (Kernel Headers)
+    # 作用: 驱动编译必须需要内核的头文件来定义数据结构和 API 接口.
+    echo "Installing Linux kernel headers..."
+    apt-get -qq install --no-install-recommends linux-headers-${KERNEL_VERSION} >/dev/null
+
+    # 4. 下载并提取内核镜像与模块文件
+    # 为什么要这么写: 我们不能直接使用 apt-get install 安装内核镜像,
+    # 因为那会触发更新 grub、initramfs 等对容器来说毫无意义且容易报错的操作.
+    # 我们只需要里面的文件, 所以采用 "下载 (download) + 提取 (dpkg -x)" 的方式.
+    echo "Installing Linux kernel module files..."
+    # 提取 vmlinuz (内核压缩镜像)
+    apt-get -qq download linux-image-${KERNEL_VERSION} && dpkg -x linux-image*.deb .
+    # 提取内核自带的模块(如果存在)
+    { apt-get -qq download linux-modules-${KERNEL_VERSION} && dpkg -x linux-modules*.deb . || true; } 2>/dev/null
+
+    # 5. 将提取出的内核文件移动到系统标准位置
+    # 移动模块依赖描述文件 (modules.alias, modules.dep 等)
+    mv lib/modules/${KERNEL_VERSION}/modules.* /lib/modules/${KERNEL_VERSION}
+    # 移动内核自带的驱动源码/二进制
+    mv lib/modules/${KERNEL_VERSION}/kernel /lib/modules/${KERNEL_VERSION}
+
+    # 6. 生成模块依赖关系
+    # 作用: 运行 depmod 命令, 让系统生成 modules.dep 等映射表, 确保驱动可以被 modprobe 正确加载.
+    depmod ${KERNEL_VERSION}
+
+    # 7. 提取并伪造内核版本字符串
+    echo "Generating Linux kernel version string..."
+    # 从 boot 目录下的 vmlinuz 文件名中提取准确的内核版本.
+    # 比如从 /boot/vmlinuz-5.15.0-101-generic 中提取出 5.15.0-101-generic.
+    ls -1 boot/vmlinuz-* | sed 's/\/boot\/vmlinuz-//g' - >version
+    if [ -z "$(<version)" ]; then
+        echo "Could not locate Linux kernel version string" >&2
+        return 1
+    fi
+    # 关键一步: 将提取出的版本号写入我们之前创建的伪装 proc 目录.
+    # 为什么要这么写: NVIDIA 的安装程序 (nvidia-installer) 会读取这个文件来验证
+    # 编译环境与当前运行的内核是否一致. 如果不一致, 安装会报错.
+    mv version /lib/modules/${KERNEL_VERSION}/proc
+)
+# 在 gpu-driver-container 项目中, 这个函数是 "运行时环境重构" 的核心.
+# 它的任务是: 在不重启宿主机的情况下, 在容器内部伪造出一个与宿主机内核完全一致的开发环境, 以便随后编译 NVIDIA 驱动模块.
+# 研究员视角的深度解析: 为什么要这么写?
+# 作为研究人员, 我们需要看透这段代码背后的设计哲学:
+# 1. 容器内的"环境欺骗" (Environment Mimicry)
+# NVIDIA 驱动的 .run 安装程序是非常敏感的, 它会检查 /lib/modules/$(uname -r)/build 和 /proc/version. 在普通的 Docker 容器里, 这些路径要么不存在, 要么指向的是容器的基础镜像(如 Ubuntu 20.04), 而不是宿主机的真实内核.
+# 这段代码的本质: 它手动构建了一个极简的、模拟宿主机环境的目录树. 通过这种方式, "骗过"了 NVIDIA 安装程序, 让它以为自己是在一台普通的物理机上进行编译.
+# 2. "提取"而非"安装"的优雅
+# 通常我们安装包用 apt-get install. 但在这里, 使用了 download + dpkg -x.
+# 设计原因: 驱动容器追求的是极轻量化和非侵入性.
+# apt-get install linux-image 会尝试修改容器的引导配置, 这在 K8s 环境下非常危险且冗余.
+# 通过 dpkg -x, 脚本只拿走了它需要的东西(内核模块符号表和版本字符串), 而不触动系统的软件包管理状态.
+# 3. 解决内核 ABI 匹配问题
+# 驱动开发中有一个术语叫 "Symbols Matching".
+# 驱动编译不仅需要头文件, 还需要内核的符号表.
+# depmod 的调用确保了新编译的 nvidia.ko 能够看到内核暴露出的所有函数接口.
+# 通过从 vmlinuz 提取版本号并存入 proc/version 伪装路径, 确保了 Runtime (运行时) 与 Compile-time (编译时) 的绝对统一.
+# 4. 健壮性: || true 与 Subshell
+# { ... || true; } 2>/dev/null: 处理某些精简版内核可能没有 linux-modules 包的情况, 防止脚本因为一个非必要的包没下到而直接崩溃.
+# 使用 ( ) 子 Shell: 在函数内所有的 cd 和文件操作都是"局部"的. 这在编写复杂的 Kubernetes 基础设施脚本时非常重要, 防止函数运行后的残留状态影响后续的 init 步骤.
+# 总结建议
+# 如果你正在排查驱动容器启动失败的问题, 你应该重点检查这个函数产生的 /lib/modules/${KERNEL_VERSION}/proc/version 文件. 如果这个文件里的内容与宿主机的 uname -r 不一致, 或者 apt-get download 失败, 那么 NVIDIA 驱动将永远无法成功安装.
+
+# Cleanup the prerequisites installed above.
+_remove_prerequisites() {
+    # 1. 条件判断: 检查是否为"内置"模式
+    # 逻辑: 只有当 PACKAGE_TAG 不等于 "builtin" 时才执行清理.
+    # 为什么要这么写:
+    #   - 如果镜像标签是 "builtin"(胖镜像), 说明依赖是预先打包在镜像里的只读层, 删不掉.
+    #   - 如果是动态下载的(瘦镜像), 依赖存在于容器的可写层(Writable Layer), 必须清理.
+    if [ "${PACKAGE_TAG:-}" != "builtin" ]; then
+        # 2. 彻底清除内核头文件
+        # apt-get purge: 不仅删除包文件, 还删除相关的配置文件.
+        # -qq: 极简模式, 不产生冗余日志, 节省 K8s 日志存储空间.
+        # linux-headers-${KERNEL_VERSION}: 之前为了编译驱动而安装的几百 MB 的头文件.
+        apt-get -qq purge linux-headers-${KERNEL_VERSION} >/dev/null
+        # 3. 待办事项注释 (TODO)
+        # 含义: 提示未来需要手动删除那些通过 `dpkg -x` 解压出来的内核模块文件.
+        # 为什么要这么写:
+        #   在之前的 `_install_prerequisites` 步骤中, 脚本手动提取了内核镜像文件.
+        #   由于这些文件不是通过 apt 正式安装的, 因此 `apt-get purge` 删不掉它们,
+        #   需要额外的 `rm -rf` 逻辑来进一步释放空间.
+        # TODO remove module files not matching an existing driver package.
+    fi
+}
+# _remove_prerequisites(移除预备依赖)函数是驱动容器生命周期中"编译后处理"阶段的关键步骤. 它的核心任务是在驱动编译完成后, 卸载掉那些体积巨大且不再需要的构建工具和头文件.
+# 研究员视角的深度解析: 为什么要这么写?
+# 作为一名高级研究员, 我们需要从 "容器镜像卫生 (Image Hygiene)" 和 "资源效率" 的角度来审视这个设计:
+# 1. 极度压榨可写层(Writable Layer)的存储空间
+# 在 Kubernetes 集群中, gpu-driver-container 通常以 DaemonSet 形式运行在每一个节点上.
+# 痛点: 驱动编译依赖(gcc, make, kernel-headers)加起来往往超过 500MB.
+# 设计逻辑: 驱动一旦编译完成(生成了 .ko 文件)并加载进内核, 这些源代码和头文件就变成了"过河拆桥"里的"桥".
+# 结果: 通过删除这些依赖, 容器运行时的磁盘占用会从几百 MB 骤降到几十 MB. 这对于那些根磁盘空间较小的云服务器节点(如 AWS/GCP 的默认系统盘)至关重要, 防止触发 K8s 的 DiskPressure(磁盘压力)导致节点驱逐.
+# 2. 降低攻击面(Attack Surface Reduction)
+# 安全视角: 一个运行中的容器, 如果保留了 gcc、make 和内核头文件, 无异于给潜在的攻击者留下了一套完整的"本地提权/恶意内核模块编译工具链".
+# 为什么要这么写: 在安装完驱动后立即卸载这些开发工具, 符合 "最小化运行环境" 的安全原则. 虽然这个函数目前只删了 headers, 但它配合整个流程实现了"即插即用, 用完即弃"的工具链管理.
+# 3. 区分"瘦镜像"与"胖镜像"的逻辑解耦
+# 策略选择:
+# 瘦镜像(Thin Image): 在容器启动时动态下载 headers. 这种情况下, headers 位于容器最上层的"可写层", 删除它们能真实释放磁盘空间.
+# 胖镜像(Builtin Image): headers 已经被封印在镜像的只读层(Read-only layers)中. 在只读层上执行删除操作, 实际上并不会减小镜像体积, 反而会产生一个"删除记录"在可写层, 增加不必要的 metadata.
+# 为什么要这么写: 通过 if [ "$PACKAGE_TAG" != "builtin" ], 脚本聪明地避开了对只读层的无效操作.
+# 4. 关于那个 TODO 的技术背景
+# 在 _install_prerequisites 中, 脚本使用了 dpkg -x 手动解压缩内核镜像.
+# 风险点: 这些手动解压的文件散落在 /lib/modules 下. 如果不手动 rm, 它们会一直占用磁盘.
+# 架构思考: NVIDIA 留下的这个 TODO 反映了容器化驱动在处理 "非包管理器追踪文件" 时的复杂性. 在高级自动化运维中, 我们通常会建议在编译完成后, 除了卸载 headers, 还要清理所有 /tmp 下的解压残留.
+# 总结
+# _remove_prerequisites 是驱动容器从 "构建状态" 切换到 "运行状态" 的分水岭. 它确保了 GPU 驱动容器在 Kubernetes 集群中是一个 "轻量级、安全且低资源占用" 的守护进程, 而不是一个背负着巨大编译工具包的臃肿程序.
+# 研究员建议:
+# 如果你在生产环境发现 GPU 节点磁盘增长过快, 可以检查驱动容器是否成功执行了这一步. 如果因为某种原因(如 apt 锁冲突)导致清理失败, 长期累积的内核头文件可能会填满宿主机的磁盘.
+
+# Check if the kernel version requires a new precompiled driver packages.
+_kernel_requires_package() {
+    # 1. 初始化变量, 用于存放模拟 proc 挂载点的参数
+    local proc_mount_arg=""
+
+    echo "Checking NVIDIA driver packages..."
+    # 切换到驱动源码及预编译包所在的目录
+    # KERNEL_TYPE 可能是 "kernel" (闭源) 或 "kernel-open" (开源)
+    cd /usr/src/nvidia-${DRIVER_VERSION}/${KERNEL_TYPE}
+
+    # proc_mount_arg needs to be set, to do the module match check below
+    # 2. 模拟环境匹配逻辑
+    # 检查是否存在我们在 _install_prerequisites 步骤中伪造的 proc/version 文件.
+    # 为什么要这么写: mkprecompiled 工具需要对比二进制文件与目标内核的版本字符串.
+    # 由于容器内真实的 /proc/version 可能与宿主机内核头文件不一致,
+    # 我们使用之前提取出来的"伪装"路径来保证匹配的绝对准确.
+    if [ -f /lib/modules/${KERNEL_VERSION}/proc/version ]; then
+        proc_mount_arg="--proc-mount-point /lib/modules/${KERNEL_VERSION}/proc"
+    fi
+    # 3. 遍历预编译目录 (precompiled/**)
+    # NVIDIA 镜像中可能预存了针对常用内核版本(如 Ubuntu 常见版本)提前编译好的 .ko 模块.
+    for pkg_name in $(ls -d -1 precompiled/** 2>/dev/null); do
+        # 4. 调用关键工具 mkprecompiled 进行"指纹匹配"
+        # --match 参数会检查 pkg_name 里的驱动二进制是否与当前的 KERNEL_VERSION 兼容.
+        # 如果匹配成功, mkprecompiled 通常返回 0.
+        if ! ../mkprecompiled --match ${pkg_name} ${proc_mount_arg} >/dev/null; then
+            # 如果 ! (匹配成功) 为真, 意味着找到了匹配的包.
+            echo "Found NVIDIA driver package ${pkg_name##*/}"
+            # 返回 1: 代表"不需要"重新创建/编译驱动包(因为已经有了).
+            return 1
+        fi
+    done
+    # 5. 如果遍历完所有预编译包都没有匹配成功
+    # 返回 0: 代表"需要"现场执行编译流程.
+    return 0
+}
+# 在 gpu-driver-container 的逻辑中, _kernel_requires_package 是一个"决策性"函数. 它的核心任务是判断: "针对当前的宿主机内核, 镜像里是否已经存在现成的、预编译好的驱动包?"
+# 如果能找到匹配的预编译包, 容器就可以跳过耗时的 gcc 编译过程, 直接加载驱动; 如果找不到, 才进入后续的"现场编译"流程. 这体现了"预编译优先, 源码编译兜底"的高级运维策略.
+# 研究员视角的深度解析: 为什么要这么写?
+# 作为一名研究员, 你需要理解这个函数背后的三个核心工程考量:
+# 1. 极致的启动速度(Avoiding JIT Compilation)
+# 在 Kubernetes 集群中, 当一个包含 GPU 的节点扩容时, 我们希望驱动能以秒级速度加载完成.
+# 痛点: 现场编译(Kernel Module Build)需要下载 headers、调用 gcc, 通常耗时 1-3 分钟, 且非常消耗 CPU.
+# 优化: NVIDIA 在构建镜像时, 会预先把一些主流发行版(如 Ubuntu 22.04 最新内核)的驱动编译好放在 precompiled/ 下. _kernel_requires_package 的存在就是为了实现"瞬时启动".
+# 2. 内核 ABI 的严格一致性(ABI Stability)
+# Linux 内核的 ABI(应用二进制接口)非常不稳定. 哪怕内核主版本号一样, 如果编译配置(Config)不同, 驱动 .ko 文件也无法加载.
+# 设计逻辑: mkprecompiled --match 不仅仅是看版本号字符串, 它会深入检查内核符号表(Symbols). 通过使用 --proc-mount-point 指向我们之前提取出的宿主机内核特征文件, 它能确保: 只有当预编译包与宿主机内核"基因完全匹配"时, 才复用它. 这避免了因强制加载不兼容模块导致的系统崩溃(Kernel Panic).
+# 3. 命名逻辑的"反直觉"设计
+# 你可能注意到了这个函数的返回逻辑:
+# 找到匹配包 -> 返回 1
+# 没找匹配包 -> 返回 0
+# 调用逻辑: 在 nvidia-driver 的主流程中, 你会看到 if _kernel_requires_package; then _create_driver_package; fi.
+# 为什么要这么写: 在 Shell 编程中, 0 代表"真/成功". 所以这个函数的语义是 "判断需要构建这个命题是否成立". 如果没有现成包, 命题成立(返回 0), 去执行编译; 如果有现成包, 命题不成立(返回 1), 跳过编译.
+# 4. 容器化环境下的"环境欺骗"
+# 代码中再次出现了对 /lib/modules/${KERNEL_VERSION}/proc/version 的引用.
+# 深度原因: mkprecompiled 工具在容器内运行时, 如果直接读容器的 /proc/version, 拿到的可能是容器基础镜像(如老版本 Debian)的内核信息, 这会导致匹配误判.
+# 解决思路: 这种"重定向" proc 路径的做法是底层基础设施容器化时常用的技巧, 本质上是为工具提供一个"隔离的、精确的上下文环境".
+# 总结
+# _kernel_requires_package 是驱动容器智能化的体现. 它让驱动镜像具备了"自我审计"的能力: 能省事(用预编译包)就省事, 实在不行再下苦力(现场编译). 这正是 NVIDIA 驱动容器能够支撑大规模、异构内核 Kubernetes 集群平稳运行的关键所在.
+
+# Compile the kernel modules, optionally sign them, and generate a precompiled package for use by the nvidia-installer.
+# 使用 () 定义子 Shell 运行函数, 确保环境变量和目录切换在退出后自动还原
+_create_driver_package() (
+    # 1. 构造包名: 例如 nvidia-modules-5.15.0-101-my-tag
+    # ${KERNEL_VERSION%-*}: 截取内核版本号, 去掉最后一段(如去掉 -generic).
+    # ${PACKAGE_TAG:+-${PACKAGE_TAG}}: 如果定义了标签, 则加上前缀 "-".
+    local pkg_name="nvidia-modules-${KERNEL_VERSION%-*}${PACKAGE_TAG:+-${PACKAGE_TAG}}"
+    local nvidia_sign_args=""
+    local nvidia_modeset_sign_args=""
+    local nvidia_uvm_sign_args=""
+
+    # 2. 退出清理钩子
+    # 无论成功失败, 在退出子 Shell 时执行 make clean, 防止临时编译文件堆积.
+    trap "make -s -j SYSSRC=/lib/modules/${KERNEL_VERSION}/build clean > /dev/null" EXIT
+
+    echo "Compiling NVIDIA driver kernel modules..."
+    cd /usr/src/nvidia-${DRIVER_VERSION}/${KERNEL_TYPE}
+
+    # 3. 处理 GPUDirect RDMA (核心生产环境特性)
+    # 如果开启了 RDMA, 需要将 Mellanox OFED (MOFED) 网络驱动的头文件链接进来.
+    if _gpu_direct_rdma_enabled; then
+        # 建立 MOFED 源码的软链接
+        ln -s /run/mellanox/drivers/usr/src/ofa_kernel /usr/src/
+        # if arch directory exists(MOFED >=5.5) then create a symlink as expected by GPU driver installer
+        # This is required as currently GPU driver installer doesn't expect headers in x86_64 folder, but only in either default or kernel-version folder.
+        # ls -ltr /usr/src/ofa_kernel/
+        # lrwxrwxrwx 1 root root   36 Dec  8 20:10 default -> /etc/alternatives/ofa_kernel_headers
+        # drwxr-xr-x 4 root root 4096 Dec  8 20:14 x86_64
+        # lrwxrwxrwx 1 root root   44 Dec  9 19:05 5.4.0-90-generic -> /usr/src/ofa_kernel/x86_64/5.4.0-90-generic/
+
+        # 特殊逻辑: MOFED 5.5+ 版本的头文件结构发生了变化
+        # GPU 驱动安装器通常在固定路径寻找头文件, 这里根据架构和内核版本手动创建软链接补齐路径.
+        if [[ -d /run/mellanox/drivers/usr/src/ofa_kernel/$DRIVER_ARCH/$(uname -r) ]]; then
+            if [[ ! -e /usr/src/ofa_kernel/$(uname -r) ]]; then
+                ln -s /run/mellanox/drivers/usr/src/ofa_kernel/$DRIVER_ARCH/$(uname -r) /usr/src/ofa_kernel/
+            fi
+        fi
+    fi
+
+    # 4. 执行编译
+    # IGNORE_CC_MISMATCH=1: 极其关键! 强制忽略容器 GCC 版本与宿主机内核 GCC 版本的微小差异.
+    # SYSSRC: 指定内核源码/头文件路径.
+    # 只编译内核接口部分(nv-linux.o 和 nv-modeset-linux.o).
+    export IGNORE_CC_MISMATCH=1
+    make -s -j SYSSRC=/lib/modules/${KERNEL_VERSION}/build nv-linux.o nv-modeset-linux.o >/dev/null
+
+    # 5. 重链接 (Relinking) —— 核心步骤
+    # 为什么要这么写: NVIDIA 驱动由两部分组成: 1. 开源的"胶水层"(.o); 2. 闭源的二进制核心(nv-kernel.o_binary).
+    # 这里通过 ld 将刚才编译的胶水层与闭源核心链接成最终的内核模块 (.ko).
+    echo "Relinking NVIDIA driver kernel modules..."
+    rm -f nvidia.ko nvidia-modeset.ko
+    ld -d -r -o nvidia.ko ./nv-linux.o ./nvidia/nv-kernel.o_binary
+    ld -d -r -o nvidia-modeset.ko ./nv-modeset-linux.o ./nvidia-modeset/nv-modeset-kernel.o_binary
+
+    # 6. 模块签名 (处理 Secure Boot)
+    # 如果提供了私有密钥(PRIVATE_KEY), 则调用 sign-file 工具对生成的 .ko 进行签名.
+    # donkey 是 NVIDIA 内部或特定环境下的密钥获取工具.
+    if [ -n "${PRIVATE_KEY}" ]; then
+        echo "Signing NVIDIA driver kernel modules..."
+        donkey get ${PRIVATE_KEY} sh -c "PATH=${PATH}:/usr/src/linux-headers-${KERNEL_VERSION}/scripts && \
+          sign-file sha512 \$DONKEY_FILE pubkey.x509 nvidia.ko nvidia.ko.sign &&                          \
+          sign-file sha512 \$DONKEY_FILE pubkey.x509 nvidia-modeset.ko nvidia-modeset.ko.sign &&          \
+          sign-file sha512 \$DONKEY_FILE pubkey.x509 nvidia-uvm.ko"
+        # 记录签名参数, 以便后续打包工具使用
+        nvidia_sign_args="--linked-module nvidia.ko --signed-module nvidia.ko.sign"
+        nvidia_modeset_sign_args="--linked-module nvidia-modeset.ko --signed-module nvidia-modeset.ko.sign"
+        nvidia_uvm_sign_args="--signed"
+    fi
+
+    # 7. 封装预编译包
+    # 使用 mkprecompiled 工具将编译好的 .ko 模块和元数据封装成一个自定义格式的包.
+    # 为什么要这么写: 这样这个包就可以被前面的 _kernel_requires_package 识别并复用.
+    echo "Building NVIDIA driver package ${pkg_name}..."
+    ../mkprecompiled --pack ${pkg_name} --description ${KERNEL_VERSION} \
+        --proc-mount-point /lib/modules/${KERNEL_VERSION}/proc \
+        --driver-version ${DRIVER_VERSION} \
+        --kernel-interface nv-linux.o \
+        --linked-module-name nvidia.ko \
+        --core-object-name nvidia/nv-kernel.o_binary \
+        ${nvidia_sign_args} \
+        --target-directory . \
+        --kernel-interface nv-modeset-linux.o \
+        --linked-module-name nvidia-modeset.ko \
+        --core-object-name nvidia-modeset/nv-modeset-kernel.o_binary \
+        ${nvidia_modeset_sign_args} \
+        --target-directory . \
+        --kernel-module nvidia-uvm.ko \
+        ${nvidia_uvm_sign_args} \
+        --target-directory .
+
+    # 将生成的包移动到 precompiled 目录, 完成构建流程
+    mkdir -p precompiled
+    mv ${pkg_name} precompiled
+)
+# 如果说 _resolve_kernel_version 是在寻找"配方", 那么 _create_driver_package 就是真正的"炼金工厂". 这是整个 nvidia-driver-container 最核心、技术含量最高的部分: 它负责现场编译驱动内核模块(Kernel Modules), 并将它们链接成最终的二进制文件, 最后打包供后续安装使用.
+# 研究员视角的深度解析: 为什么要这么写?
+# 作为研究员, 这段代码揭示了 NVIDIA 驱动在复杂系统环境下的生存之道:
+# 1. 规避 Linux GPL 约束的"胶水层"设计
+# 你会发现它不是直接编译出 nvidia.ko, 而是先 make 得到 nv-linux.o, 再用 ld 链接 nv-kernel.o_binary.
+# 设计原因: Linux 内核是 GPL 协议的. 为了不公开核心算法代码, NVIDIA 提供了一个闭源的二进制 blob (nv-kernel.o_binary). 通过现场编译一个开源的"胶水层"并链接, 既保证了驱动能适配不断变化的 Linux 内核接口, 又保护了商业机密.
+# 2. IGNORE_CC_MISMATCH=1 的无奈与必要
+# 在 Kubernetes 生产环境中, 镜像内的 GCC 版本(比如 11.x)经常和宿主机内核编译时的 GCC 版本(比如 11.2)有微小差异.
+# 设计原因: 默认情况下, Linux 内核禁止加载 GCC 版本不匹配的模块, 怕引起崩溃. 但在容器化场景下, 严格匹配 GCC 版本几乎不可能实现. NVIDIA 经过测试认为微小差异是安全的, 因此通过这个环境变量强制绕过检查.
+# 3. RDMA 与 MOFED 的跨容器协作
+# _gpu_direct_rdma_enabled 块中的软链接逻辑非常有趣.
+# 设计原因: 在高性能计算集群中, 网络驱动(MOFED)通常由另一个容器管理. GPU 驱动安装时需要 MOFED 的头文件. 由于两个容器的内部路径可能不同, 脚本通过一系列 ln -s 手动补齐了 NVIDIA 安装程序预期的目录结构. 这体现了容器化环境下"文件路径兼容性"的手工修复过程.
+# 4. 处理 UEFI Secure Boot
+# 代码中关于 PRIVATE_KEY 和 sign-file 的逻辑是为企业级安全准备的.
+# 设计原因: 如果宿主机开启了 Secure Boot, 内核会拒绝加载未签名的模块. 驱动容器通过接收外部传入的密钥(由 Operator 注入), 在现场编译完成后立即进行签名. 这样即便是现场生成的驱动, 也能顺利通过内核的安全校验.
+# 5. mkprecompiled 的工程化闭环
+# 最后一步使用 mkprecompiled.
+# 设计原因: 它不仅是为了安装, 更是为了缓存. 通过将编译结果封装成特定格式, 如果 Pod 重启或者其他相同内核的节点加入, 脚本可以先通过 _kernel_requires_package 检查到这个包, 从而实现"一次编译, 全集群复用".
+# 总结建议
+# 这段代码是 "基础设施即代码" 的典范. 它将原本需要资深运维手动操作的内核模块开发、链接、签名流程, 全部抽象成了容器启动时的几秒钟脚本逻辑.
+# 如果你在生产环境遇到驱动容器启动失败, 请重点关注 RDMA 软链接 是否创建成功, 以及 GCC 版本差异 是否过大. 如果是在开启了 Secure Boot 的环境, donkey 获取密钥的步骤往往是排查的重点.
+
+# --- 1. 探测 NVSwitch 系统 ---
+# 作用: 判断当前机器是否属于基于 NVSwitch 构建的多 GPU 高速互联系统(如 NVIDIA DGX 或 HGX).
+# 为什么要这么写: 在拥有多个 GPU(如 8 个 A100/H100)的系统中, NVSwitch 负责 GPU 间全带宽互联.
+# 如果探测到 NVSwitch 硬件, 驱动安装流程必须启动 nvidia-fabricmanager 服务, 否则 GPU 间无法通信.
+_assert_nvswitch_system() {
+    # 检查 proc 文件系统下是否存在 nvswitch 驱动目录.
+    # 逻辑: 如果目录不存在, 说明当前系统不是 NVSwitch 架构.
+    [ -d /proc/driver/nvidia-nvswitch/devices ] || return 1
+
+    # 检查目录下是否有设备文件.
+    # 逻辑: 使用 ls -A 判断目录是否为空. 如果为空, 说明虽然驱动结构在, 但物理硬件不可见.
+    if [ -z "$(ls -A /proc/driver/nvidia-nvswitch/devices)" ]; then
+        return 1
+    fi
+    return 0
+}
+
+# Check if mellanox devices are present
+# --- 2. 探测 Mellanox 网络设备 ---
+# 作用: 扫描 PCI 总线, 确认系统中是否存在 Mellanox(现为 NVIDIA Networking)的高性能网卡.
+# 为什么要这么写: Mellanox 网卡是实现 GPUDirect RDMA 的前提.
+# 作为容器化驱动, 它不能盲目相信环境变量, 必须通过扫描 /sys/ 目录下的硬件指纹来确认.
+_mellanox_devices_present() {
+    devices_found=0
+    # 遍历宿主机映射进容器的 PCI 设备路径
+    for dev in /sys/bus/pci/devices/*; do
+        # 读取 PCI 设备的 vendor(供应商 ID)文件
+        read vendor <$dev/vendor
+        # 0x15b3 是 Mellanox Technologies 的官方十六进制供应商 ID.
+        # 这是硬件层面的唯一标识.
+        if [ "$vendor" = "0x15b3" ]; then
+            echo "Mellanox device found at $(basename $dev)"
+            return 0
+        fi
+    done
+    echo "No Mellanox devices were found..."
+    return 1
+}
+
+# --- 3. 综合判断 GPUDirect RDMA 是否启用 ---
+# 作用: 最终决定是否安装和加载 nvidia-peermem 内核模块.
+# 为什么要这么写: GPUDirect RDMA 允许 GPU 显存数据不经过 CPU 拷贝, 直接发送到网络.
+# 开启此功能需要两个条件: 1. 用户明确想要(环境变量); 2. 硬件确实支持(有 Mellanox 网卡).
+_gpu_direct_rdma_enabled() {
+    # 首先检查用户是否通过 K8s 的 ENV 传入了启用意图
+    if [ "${GPU_DIRECT_RDMA_ENABLED}" = "true" ]; then
+        # check if mellanox cards are present
+        # 即使意图为真, 也要调用上面的函数去扫描 PCI 总线确认硬件存在.
+        # 逻辑: 如果没硬件却强行加载 RDMA 模块, 会导致驱动报错或系统不稳.
+        if _mellanox_devices_present; then
+            return 0
+        fi
+    fi
+    return 1
+}
+# 在 Kubernetes 集群中, 节点的硬件配置往往是异构的(有些是普通服务器, 有些是配备了 NVSwitch 的 DGX 架构, 有些带 InfiniBand 网卡, 有些则不带).
+# 这部分代码的作用是: 通过探测宿主机的物理特性, 决定是否开启高性能计算(HPC)相关的驱动组件.
+# 研究员视角的深度解析: 为什么要这么写?
+# 作为高级研究员, 我们需要从 "软硬件解耦" 和 "集群异构性" 两个层面理解这些逻辑:
+# 1. 硬件指纹的权威性(The Source of Truth)
+# 在 Kubernetes 环境下, 容器是高度隔离的. 但是, 驱动安装程序必须知道宿主机的"真身".
+# 设计逻辑: 代码直接读取 /sys/bus/pci/devices 和 /proc/driver. 这是 Linux 系统中最原始、最权威的硬件信息来源.
+# 为什么要这么写: 这种"现场扫描"机制避免了由于用户在 Kubernetes YAML 中错误配置了环境变量而导致的驱动崩溃. 例如, 用户在只有普通千兆网卡的节点上开启了 RDMA=true, 脚本会自动探测到没有 Mellanox 硬件, 从而跳过 RDMA 配置, 保护系统不会因加载错误的内核模块而 Kernel Panic.
+# 2. NVSwitch 与 Fabric Manager 的强绑定
+# 背景: 在 A100/H100 SXM 架构中, GPU 之间不是直接连接的, 而是全部连接到物理 NVSwitch 芯片上.
+# 逻辑必要性: _assert_nvswitch_system 的存在是为了决定是否运行 nv-fabricmanager.
+# 为什么要这么写: Fabric Manager 是一个用户态进程, 负责配置 NVSwitch 的路由表. 如果没有这段探测逻辑, 在普通单卡机器(如 T4/L4)上运行驱动容器时, 就会浪费资源去启动一个注定会失败的服务.
+# 3. PCI 厂商 ID 的硬编码(0x15b3)
+# 专业性: 在底层编程中, Vendor ID 是识别硬件最快、最准的方式.
+# 为什么要这么写: 不使用 lspci 等命令, 是因为驱动容器追求 "零依赖". lspci 依赖于 pciutils 包和 pci.ids 数据库, 而直接读取 /sys 文件系统只需要基本的 Shell 功能, 这保证了脚本在极简的基础镜像(如 Alpine 或最小化 Ubuntu)中也能完美运行.
+# 4. GPUDirect RDMA 的决策链
+# NCCL 性能优化: 对于大规模分布式深度学习训练(使用 NCCL 库), RDMA 是性能翻倍的关键.
+# 逻辑解耦: _gpu_direct_rdma_enabled 体现了"意图(Intent)"与"能力(Capability)"的分离. 它是为了支撑 NVIDIA Peer Memory (nvidia-peermem) 模块的加载. 如果该函数返回 0, 后续流程会去寻找 MOFED(Mellanox OFED)驱动的头文件进行编译.
+# 总结
+# 这部分代码是驱动容器的"眼睛". 它确保了驱动镜像在复杂的 Kubernetes 集群中能够 "自适应":
+# 在 DGX 节点上: 它是"全功能版", 开启 NVSwitch 和 RDMA.
+# 在 普通训练节点上: 它开启 RDMA 但不运行 Fabric Manager.
+# 在 纯推理节点(如 T4)上: 它只安装最基础的内核模块.
+# 这种智能探测是 NVIDIA GPU Operator 能够实现"一键部署到异构集群"的核心机密.
+
+# For each kernel module configuration file mounted into the container,
+# parse the file contents and extract the custom module parameters that
+# are to be passed as input to 'modprobe'.
+#
+# Assumptions:
+# - Configuration files are named <module-name>.conf (i.e. nvidia.conf, nvidia-uvm.conf).
+# - Configuration files are mounted inside the container at /drivers.
+# - Each line in the file contains at least one parameter, where parameters on the same line
+#   are space delimited. It is up to the user to properly format the file to ensure
+#   the correct set of parameters are passed to 'modprobe'.
+_get_module_params() {
+    # 定义基础路径, 在 Kubernetes 中, 这通常是一个挂载进来的 ConfigMap 路径
+    local base_path="/drivers"
+    # nvidia
+    # --- 处理 nvidia 基础模块参数 ---
+    # 逻辑: 检查是否存在 nvidia.conf 配置文件
+    if [ -f "${base_path}/nvidia.conf" ]; then
+        # 为什么要这么写: 使用 while 循环逐行读取文件内容
+        # IFS="": 保持行首尾的空格不被修剪
+        # read -r: 防止反斜杠被转义
+        # || [ -n "$param" ]: 这是一个经典技巧, 确保如果文件最后一行没有换行符也能被正确读取
+        while IFS="" read -r param || [ -n "$param" ]; do
+            # 将读取到的每一行(参数)存入全局数组
+            NVIDIA_MODULE_PARAMS+=("$param")
+        done <"${base_path}/nvidia.conf"
+        # 打印日志, 方便在 K8s 日志中确认加载了哪些参数
+        echo "Module parameters provided for nvidia: ${NVIDIA_MODULE_PARAMS[@]}"
+    fi
+    # nvidia-uvm
+    # --- 处理 nvidia-uvm (统一内存) 模块参数 ---
+    # 作用: 计算任务的核心. 常见的调优参数如内存重映射策略等
+    if [ -f "${base_path}/nvidia-uvm.conf" ]; then
+        while IFS="" read -r param || [ -n "$param" ]; do
+            NVIDIA_UVM_MODULE_PARAMS+=("$param")
+        done <"${base_path}/nvidia-uvm.conf"
+        echo "Module parameters provided for nvidia-uvm: ${NVIDIA_UVM_MODULE_PARAMS[@]}"
+    fi
+    # nvidia-modeset
+    # --- 处理 nvidia-modeset (显示设置) 模块参数 ---
+    # 作用: 处理显示输出相关的内核逻辑
+    if [ -f "${base_path}/nvidia-modeset.conf" ]; then
+        while IFS="" read -r param || [ -n "$param" ]; do
+            NVIDIA_MODESET_MODULE_PARAMS+=("$param")
+        done <"${base_path}/nvidia-modeset.conf"
+        echo "Module parameters provided for nvidia-modeset: ${NVIDIA_MODESET_MODULE_PARAMS[@]}"
+    fi
+    # nvidia-peermem
+    # --- 处理 nvidia-peermem (RDMA) 模块参数 ---
+    # 作用: 高性能计算(HPC)中的关键. 用于配置 GPU 显存与第三方设备(如 IB 网卡)的内存对等访问
+    if [ -f "${base_path}/nvidia-peermem.conf" ]; then
+        while IFS="" read -r param || [ -n "$param" ]; do
+            NVIDIA_PEERMEM_MODULE_PARAMS+=("$param")
+        done <"${base_path}/nvidia-peermem.conf"
+        echo "Module parameters provided for nvidia-peermem: ${NVIDIA_PEERMEM_MODULE_PARAMS[@]}"
+    fi
+}
+# 在 GPU 驱动领域, "内核模块参数(Kernel Module Parameters)" 是高级运维和性能调优的"手术刀". 很多核心特性(如开启 GSP 固件、调整显存分配策略、配置 RDMA 内存固定)都不是通过修改代码实现的, 而是通过在加载驱动时传入特定的参数实现的.
+# 这个函数的作用是: 实现"配置即代码". 它从挂载的外部配置文件中读取参数, 并动态注入到驱动加载流程中.
+# 研究员视角的深度解析: 为什么要这么写?
+# 作为一名高级研究员, 我们需要透视这段看似重复的代码背后隐藏的工程化考量:
+# 1. 深度对接 Kubernetes 的 ConfigMap 机制
+# 设计原因: 在 Kubernetes 中, 我们不希望为了修改一个驱动参数(比如关闭 GSP 固件 NVreg_EnableGpuFirmware=0)而去重新构建整个 Docker 镜像.
+# 为什么要这么写: 通过定义 base_path="/drivers", 运维人员可以创建一个 K8s ConfigMap, 里面包含 nvidia.conf 等文件, 然后将其挂载到 Pod 的 /drivers 目录下. 脚本在运行时动态读取这些配置, 实现了驱动参数的解耦与热更新(重启 Pod 即生效).
+# 2. 使用 Bash 数组(Arrays)而非字符串
+# 逻辑: NVIDIA_MODULE_PARAMS+=("$param").
+# 为什么要这么写:
+# modprobe 命令可以接受多个参数. 如果使用一个长字符串, 当参数中包含空格或特殊字符时, 解析会非常麻烦且容易出错.
+# 使用数组可以确保每个参数作为一个独立的整体被传递给后续的 modprobe nvidia "${NVIDIA_MODULE_PARAMS[@]}" 命令. 这是处理 Linux 命令参数最健壮的方式.
+# 3. 稳健的文件读取逻辑 (IFS="" read -r || [ -n "$param" ])
+# 背景: 很多用户在编写 .conf 文件时, 最后一行可能没有敲回车键.
+# 为什么要这么写: 在标准的 Bash while read 逻辑中, 如果最后一行没有 \n, 读取会返回失败并导致最后一行数据丢失. 加上 || [ -n "$param" ] 确保了即使文件格式不完美, 配置信息也不会被漏掉. 这体现了工业级脚本对各种异常边界情况的兼容.
+# 4. 分模块配置(Modularization)
+# 背景: NVIDIA 驱动由多个独立的内核模块组成(nvidia, nvidia-uvm, nvidia-modeset, nvidia-peermem).
+# 设计原因: 不同的模块接受的参数前缀和逻辑完全不同.
+# 为什么要这么写: 通过将参数拆分到四个不同的 .conf 文件中, 运维人员可以清晰地管理"基础驱动行为"、"CUDA 计算行为"以及"RDMA 网络行为". 这种结构化的配置方式大大降低了大规模集群运维时的配置错误率.
+
+# Load the kernel modules and start persistenced.
+_load_driver() {
+    # --- 1. 参数解析 ---
+    # 调用辅助函数读取挂载进来的配置文件(如 nvidia.conf), 获取用户自定义的内核模块参数.
+    echo "Parsing kernel module parameters..."
+    _get_module_params
+
+    # --- 2. GSP 固件 (GSP Firmware) 路径配置 ---
+    # 从 Turing 架构开始, NVIDIA 引入了 GSP(GPU 系统处理器)来分担 CPU 的驱动任务.
+    # 固件文件通常很大, 容器化驱动需要告诉内核去哪里找这些固件.
+    local nv_fw_search_path="$RUN_DIR/driver/lib/firmware"
+    local set_fw_path="true"
+    local fw_path_config_file="/sys/module/firmware_class/parameters/path"
+
+    # 检查用户是否显式关闭了 GSP 固件功能(NVreg_EnableGpuFirmware=0)
+    for param in "${NVIDIA_MODULE_PARAMS[@]}"; do
+        if [[ "$param" == "NVreg_EnableGpuFirmware=0" ]]; then
+            set_fw_path="false"
+        fi
+    done
+
+    # 为什么要这么写: 内核默认固件路径在容器内可能不可用,
+    # 我们将固件路径指向容器挂载的共享目录, 确保内核能正确加载 GPU 内部的运行代码.
+    if [[ "$set_fw_path" == "true" ]]; then
+        echo "Configuring the following firmware search path in '$fw_path_config_file': $nv_fw_search_path"
+        # 只有在路径为空时才写入, 避免冲突.
+        if [[ ! -z $(grep '[^[:space:]]' $fw_path_config_file) ]]; then
+            echo "WARNING: A search path is already configured in $fw_path_config_file"
+            echo "         Retaining the current configuration"
+        else
+            echo -n "$nv_fw_search_path" >$fw_path_config_file || echo "WARNING: Failed to configure firmware search path"
+        fi
+    fi
+
+    # --- 3. 加载基础硬件支持模块 ---
+    # IPMI 用于带外管理, I2C 用于板卡层面的硬件通信.
+    echo "Loading ipmi and i2c_core kernel modules..."
+    modprobe -a i2c_core ipmi_msghandler ipmi_devintf
+
+    # --- 4. 加载 NVIDIA 核心内核模块 ---
+    echo "Loading NVIDIA driver kernel modules..."
+    # set -o xtrace: 打印执行的命令, 方便在 K8s 日志中调试.
+    # +o nounset: 允许数组参数为空, 防止脚本因空变量报错退出.
+    set -o xtrace +o nounset
+    modprobe nvidia "${NVIDIA_MODULE_PARAMS[@]}"                 # 基础驱动
+    modprobe nvidia-uvm "${NVIDIA_UVM_MODULE_PARAMS[@]}"         # 统一内存(计算任务核心)
+    modprobe nvidia-modeset "${NVIDIA_MODESET_MODULE_PARAMS[@]}" # 状态/显示设置
+    set +o xtrace -o nounset
+
+    # --- 5. 加载 RDMA 支持模块 ---
+    # 如果检测到 Mellanox 网卡并开启了 RDMA, 则加载 peermem 模块, 实现 GPU-to-Network 直连.
+    if _gpu_direct_rdma_enabled; then
+        echo "Loading NVIDIA Peer Memory kernel module..."
+        set -o xtrace +o nounset
+        modprobe nvidia-peermem "${NVIDIA_PEERMEM_MODULE_PARAMS[@]}"
+        set +o xtrace -o nounset
+    fi
+
+    # --- 6. 启动持久化守护进程 (Persistence Daemon) ---
+    # 为什么要这么写: 默认情况下, 如果没有程序用 GPU, 驱动会卸载.
+    # 启动这个进程可以保持设备节点(/dev/nvidia*)始终打开, 减少 CUDA 程序初始化的延迟.
+    echo "Starting NVIDIA persistence daemon..."
+    nvidia-persistenced --persistence-mode
+
+    # --- 7. vGPU 虚拟化特定逻辑 ---
+    # 如果是 vGPU 环境, 需要处理复杂的授权逻辑.
+    if [ "${DRIVER_TYPE}" = "vgpu" ]; then
+        echo "Copying gridd.conf..."
+        cp /drivers/gridd.conf /etc/nvidia/gridd.conf
+        # 处理 NLS (Network License Server) 令牌.
+        if [ "${VGPU_LICENSE_SERVER_TYPE}" = "NLS" ]; then
+            echo "Copying ClientConfigToken..."
+            mkdir -p /etc/nvidia/ClientConfigToken/
+            cp /drivers/ClientConfigToken/* /etc/nvidia/ClientConfigToken/
+        fi
+
+        echo "Starting nvidia-gridd.."
+        LD_LIBRARY_PATH=/usr/lib/$DRIVER_ARCH-linux-gnu/nvidia/gridd nvidia-gridd
+
+        # Start virtual topology daemon
+        # 启动虚拟拓扑守护进程.
+        _start_vgpu_topology_daemon
+    fi
+
+    # --- 8. NVSwitch/Fabric Manager 逻辑 ---
+    # 如果是 HGX/DGX 等高性能集群, 需要启动 Fabric Manager 来管理 GPU 间的高速交换.
+    if _assert_nvswitch_system; then
+        echo "Starting NVIDIA fabric manager daemon..."
+        nv-fabricmanager -c /usr/share/nvidia/nvswitch/fabricmanager.cfg
+    fi
+
+    return 0
+}
+# 在 _install_driver 完成了物理文件的拷贝后, _load_driver 的任务是将这些二进制文件正式插入内核(Kernel Space), 启动核心守护进程(Daemons), 并处理现代 GPU 架构(如 GSP 固件、RDMA、NVSwitch)的复杂初始化逻辑.
+# 研究员视角的深度解析: 为什么要这么写?
+# 作为高级研究人员, 我们需要看透这几百行代码背后的工业级设计考量:
+# 1. 攻克 GSP 固件的"黑盒"难题
+# 背景: 现代 GPU(尤其是 A100/H100 之后)极其依赖 GSP 固件. 在物理机上安装驱动时, 固件会被放入 /lib/firmware. 但容器内可能没有这个权限或路径.
+# 为什么要这么写: 脚本通过修改内核的 firmware_class/parameters/path 动态改变了内核寻找固件的全局行为. 这是 "以容器之力改变宿主机内核配置" 的典型做法, 确保了驱动初始化时不会因找不到固件而失败.
+# 2. 调试可见性与鲁棒性的平衡
+# 技巧: set -o xtrace.
+# 为什么要这么写: 驱动加载失败往往发生在 modprobe 阶段(例如参数错误). 通过 xtrace, 管理员可以在 K8s 日志中直接看到 modprobe 最终拼接出的完整参数, 极大降低了排查内核参数冲突的难度.
+# 3. 解决"显卡休眠"导致的初始化慢
+# 技巧: nvidia-persistenced --persistence-mode.
+# 为什么要这么写: 在 K8s 中, Pod 的运行是高度动态的. 如果没有持久化进程, 每次新 Pod 申请 GPU 时, 驱动都要重新初始化硬件, 耗时可能长达数秒. 通过在 init 脚本里启动这个 Daemon, GPU 始终处于"热机"状态, CUDA 程序可以秒开.
+# 4. 高性能集群(HPC)的自适应性
+# 逻辑: Fabric Manager 和 RDMA 的动态判断.
+# 为什么要这么写: 同一个驱动镜像必须兼容普通服务器和价值百万美金的 DGX 超级计算机. 通过 _assert_nvswitch_system 这种硬件指纹探测, 脚本实现了驱动功能的"按需加载". 如果在一台普通 T4 服务器上运行 FM, 服务会报错崩溃; 脚本通过自动检测避开了这一点, 体现了代码的通用性.
+# 5. vGPU 授权的"最后一公里"
+# 背景: vGPU 环境下, 没有 License 显卡性能会受到严重限制.
+# 为什么要这么写: 脚本不仅安装驱动, 还充当了"配置分发器". 它将挂载进来的授权文件(Token)拷贝到系统路径并启动 gridd. 这种将"授权管理容器化"的做法, 使得大规模 VDI 或云桌面集群的自动化部署成为可能.
+# 总结
+# _load_driver 是驱动容器从"静止状态"转为"工作状态"的分水岭. 它不仅是在运行命令, 更是在编排一个复杂的软硬件协同系统.
+# 如果你在生产环境中遇到 GPU 无法被识别(nvidia-smi 报错), 请重点检查:
+# /sys/module/firmware_class/parameters/path 是否指向了正确的位置.
+# modprobe nvidia 时是否带入了不兼容的参数.
+# 如果是大规模集群, 检查 Fabric Manager 是否正常启动, 因为在 HGX 系统中, FM 不启动, GPU 之间就无法通信.
+
+# Stop persistenced and unload the kernel modules if they are currently loaded.
+_unload_driver() {
+    # --- 1. 初始化局部变量 ---
+    local rmmod_args=()     # 存储待卸载的内核模块列表
+    local nvidia_deps=0     # 记录 nvidia 基础模块被其他 nvidia 模块依赖的数量
+    local nvidia_refs=0     # nvidia 基础模块的总引用计数
+    local nvidia_uvm_refs=0 # 统一内存模块的引用计数
+    local nvidia_modeset_refs=0
+    local nvidia_peermem_refs=0
+
+    echo "Stopping NVIDIA persistence daemon..."
+
+    # --- 2. 停止用户态守护进程 (Daemons) ---
+    # 为什么要这么写: 必须先杀掉用户态进程, 因为这些进程持有驱动的句柄.
+    # 如果进程不退出, 内核模块的引用计数 (refcnt) 永远不会归零.
+
+    # (A) 停止 nvidia-persistenced (持久化守护进程)
+    if [ -f /var/run/nvidia-persistenced/nvidia-persistenced.pid ]; then
+        local pid=$(</var/run/nvidia-persistenced/nvidia-persistenced.pid)
+
+        kill -SIGTERM "${pid}" # 发送标准终止信号
+        # 轮询检查进程是否真的退出了 (最多等待 5 秒)
+        for i in $(seq 1 50); do
+            kill -0 "${pid}" 2>/dev/null || break
+            sleep 0.1
+        done
+        # 超时处理
+        if [ $i -eq 50 ]; then
+            echo "Could not stop NVIDIA persistence daemon" >&2
+            return 1
+        fi
+    fi
+
+    # (B) 停止 nvidia-gridd (vGPU 授权守护进程)
+    # 逻辑同上. 对于 vGPU 节点, 这是必须清理的组件.
+    if [ -f /var/run/nvidia-gridd/nvidia-gridd.pid ]; then
+        echo "Stopping NVIDIA grid daemon..."
+        local pid=$(</var/run/nvidia-gridd/nvidia-gridd.pid)
+
+        kill -SIGTERM "${pid}"
+        for i in $(seq 1 10); do
+            kill -0 "${pid}" 2>/dev/null || break
+            sleep 0.1
+        done
+        if [ $i -eq 10 ]; then
+            echo "Could not stop NVIDIA Grid daemon" >&2
+            return 1
+        fi
+    fi
+
+    # (C) 停止 nv-fabricmanager (针对 HGX/DGX 系统的 NVSwitch 管理器)
+    # 为什么要这么写: 在多卡互联系统中, Fabric Manager 深度参与 GPU 拓扑, 必须先于驱动关闭.
+    if [ -f /var/run/nvidia-fabricmanager/nv-fabricmanager.pid ]; then
+        echo "Stopping NVIDIA fabric manager daemon..."
+        local pid=$(</var/run/nvidia-fabricmanager/nv-fabricmanager.pid)
+
+        kill -SIGTERM "${pid}"
+        for i in $(seq 1 50); do
+            kill -0 "${pid}" 2>/dev/null || break
+            sleep 0.1
+        done
+        if [ $i -eq 50 ]; then
+            echo "Could not stop NVIDIA fabric manager daemon" >&2
+            return 1
+        fi
+    fi
+
+    # --- 3. 引用计数检查 (内核态安全自检) ---
+    # 作用: 从 /sys/module 读取内核模块的引用计数 (refcnt).
+    # 为什么要这么写: 如果引用计数 > 0, 说明还有其他进程(如正在运行的 PyTorch Pod)在使用 GPU.
+    # 此时强行卸载会导致系统崩溃.
+
+    echo "Unloading NVIDIA driver kernel modules..."
+    # 检查 nvidia-modeset (显示相关)
+    if [ -f /sys/module/nvidia_modeset/refcnt ]; then
+        nvidia_modeset_refs=$(</sys/module/nvidia_modeset/refcnt)
+        rmmod_args+=("nvidia-modeset")
+        ((++nvidia_deps)) # 它是基础模块 nvidia 的一个依赖
+    fi
+    # 检查 nvidia-uvm (统一内存, 计算任务必备)
+    if [ -f /sys/module/nvidia_uvm/refcnt ]; then
+        nvidia_uvm_refs=$(</sys/module/nvidia_uvm/refcnt)
+        rmmod_args+=("nvidia-uvm")
+        ((++nvidia_deps))
+    fi
+    # 检查 nvidia-peermem (GPUDirect RDMA 网络相关)
+    if [ -f /sys/module/nvidia_peermem/refcnt ]; then
+        nvidia_peermem_refs=$(</sys/module/nvidia_peermem/refcnt)
+        rmmod_args+=("nvidia-peermem")
+        ((++nvidia_deps))
+    fi
+    # 检查基础模块 nvidia
+    if [ -f /sys/module/nvidia/refcnt ]; then
+        nvidia_refs=$(</sys/module/nvidia/refcnt)
+        rmmod_args+=("nvidia")
+    fi
+    # --- 4. 冲突判定逻辑 ---
+    # 判断标准:
+    # 1. 如果 nvidia 基础模块的引用计数 > 它被其他 nvidia 内部模块依赖的数量
+    #    (说明有外部用户态进程如 CUDA 正在使用它)
+    # 2. 或者任何子模块 (UVM, Modeset, Peermem) 的引用计数 > 0
+    if [ ${nvidia_refs} -gt ${nvidia_deps} ] || [ ${nvidia_uvm_refs} -gt 0 ] || [ ${nvidia_modeset_refs} -gt 0 ] || [ ${nvidia_peermem_refs} -gt 0 ]; then
+        # run lsmod to debug module usage
+        # 打印调试信息, 方便运维人员通过 lsmod 查看是谁在占用
+        lsmod | grep nvidia
+        echo "Could not unload NVIDIA driver kernel modules, driver is in use" >&2
+        return 1
+    fi
+
+    # --- 5. 执行卸载 ---
+    # 如果通过了引用计数检查, 则按顺序安全卸载模块.
+    if [ ${#rmmod_args[@]} -gt 0 ]; then
+        rmmod ${rmmod_args[@]}
+    fi
+    return 0
+}
+# 在驱动管理中, "卸载"往往比"安装"更具挑战性. 因为驱动程序深度嵌入内核, 如果卸载逻辑不严谨(例如在模块仍被占用时强行卸载), 会导致内核崩溃(Kernel Panic)或系统僵死.
+# 这个函数的核心目标是: 安全、优雅、彻底地清理当前运行的 NVIDIA 用户态进程和内核模块, 为新驱动的安装或系统的纯净退出扫清障碍.
+# 研究员视角的深度解析: 为什么要这么写?
+# 1. 严格的"从上到下"卸载链
+# 在 Linux 内核中, 模块之间存在依赖关系. nvidia 是基础模块, nvidia-uvm 和 nvidia-modeset 依赖于它.
+# 设计原因: 脚本先杀守护进程(用户态), 再检查子模块, 最后卸载基础模块. 如果顺序错了, rmmod 会报错 Module is in use.
+# 2. 避免"暴力卸载" (The Safety-First Principle)
+# 你会发现脚本里没有使用 rmmod -f (强制卸载).
+# 研究员解析: 强行卸载正在被进程使用的 GPU 驱动几乎 100% 会导致内核 OOPS. 在 Kubernetes 集群中, 一个节点的内核崩溃意味着该节点上所有 Pod 都会挂掉.
+# 设计决策: 该脚本选择"失败并报错"而不是"强行尝试". 如果返回 1, Kubernetes 里的驱动 Pod 会进入 Error 状态, 运维人员一眼就能看出: "还有业务 Pod 在用显卡, 请先驱逐业务 Pod 再更新驱动."
+# 3. 精确的引用计数计算公式
+# 这是代码中最聪明的地方:
+# if [ ${nvidia_refs} -gt ${nvidia_deps} ]
+# 原理: nvidia 核心模块的 refcnt 会包含其他 NVIDIA 模块(如 uvm)对它的引用.
+# 为什么要这么算: 假设 nvidia 的总引用是 2, 而 nvidia-uvm 和 nvidia-modeset 都加载了(它们各贡献 1 个引用). 此时 nvidia_refs (2) 等于 nvidia_deps (2), 说明除了 NVIDIA 自己的驱动组件, 没有外部业务进程在用显卡. 这是可以安全卸载的临界点.
+# 4. 对异构架构的适配 (Fabric Manager)
+# 代码专门处理了 nv-fabricmanager.
+# 背景: 在 A100/H100 HGX 架构中, GPU 通过 NVSwitch 互联. Fabric Manager 负责配置这些交换机的路由.
+# 为什么要这么写: 如果不先关 FM 就卸载驱动, GPU 硬件状态可能会陷入不一致, 导致下次驱动加载时无法初始化 NVSwitch, 甚至需要重启物理机.
+# 总结建议:
+# 这个函数体现了 "确定性运维" 的思想. 如果你在生产环境中遇到驱动容器升级失败, 报 driver is in use, 通常是因为:
+# 有存留的僵尸进程(Zombie Process)持有了 /dev/nvidia* 句柄.
+# Kubernetes 的 Pod 优雅退出时间过长.
+# 宿主机上运行了某些不受 K8s 管控的直接调用 GPU 的监控工具(如本地运行的 nv-hostengine).
+# 作为高级研究人员, 我建议在集群升级前, 先通过 Taint(污点) 驱逐业务 Pod, 确保显卡引用计数归零, 再让 nvidia-driver init 执行, 这是最稳健的做法.
+
+# Link and install the kernel modules from a precompiled package using the nvidia-installer.
+_install_driver() {
+    # 1. 初始化安装参数数组
+    local install_args=()
+
+    echo "Installing NVIDIA driver kernel modules..."
+    # 2. 切换到驱动源码目录
+    # 这里的路径通常是在 init() 函数中解压驱动包并移动源码后形成的.
+    cd /usr/src/nvidia-${DRIVER_VERSION}
+    # 3. 清理旧驱动残留(关键的幂等性处理)
+    # 逻辑: 检查标准的 Linux 内核视频驱动路径.
+    # 根据不同的内核版本或发行版, 路径可能是 .../video 或 .../drivers/video.
+    if [ -d /lib/modules/${KERNEL_VERSION}/kernel/drivers/video ]; then
+        # 如果存在, 直接删除.
+        # 为什么要这么写: 防止旧版本的 nvidia.ko 冲突, 确保本次安装的是"干净"的环境.
+        rm -rf /lib/modules/${KERNEL_VERSION}/kernel/drivers/video
+    else
+        rm -rf /lib/modules/${KERNEL_VERSION}/video
+    fi
+
+    # 4. 自动处理许可证同意
+    # 逻辑: 如果环境变量 ACCEPT_LICENSE 为 yes, 则向安装器传递静默同意参数.
+    if [ "${ACCEPT_LICENSE}" = "yes" ]; then
+        install_args+=("--accept-license")
+    fi
+
+    # 5. 调用官方 nvidia-installer 执行最终安装
+    # 这里的参数组合非常有讲究, 体现了容器化驱动的核心逻辑:
+    # --kernel-module-only: [核心] 只安装内核模块. 不要动用户态的 .so 库、OpenCL 配置等.
+    #                      因为用户态组件通常在 init() 的早期步骤中已经处理好了.
+    # --no-drm: 禁用 Direct Rendering Manager (DRM) 支持.
+    #           在 Kubernetes 计算节点上, 通常不需要内核显示接口, 关闭它可以减少复杂度.
+    # --ui=none: 禁用图形/交互界面, 这是容器内运行的必备参数.
+    # --no-nouveau-check: 禁用对开源 Nouveau 驱动的检查.
+    #                     因为在容器启动前, 通常已经通过黑名单等方式处理了 Nouveau.
+    # -m=${KERNEL_TYPE}: 指定内核接口类型(kernel 闭源或 kernel-open 开源).
+    # ${install_args[@]+"${install_args[@]}"}: 优雅地传递数组参数, 如果数组为空则不传递.
+    nvidia-installer --kernel-module-only --no-drm --ui=none --no-nouveau-check -m=${KERNEL_TYPE} ${install_args[@]+"${install_args[@]}"}
+}
+# 在 gpu-driver-container 的全生命周期中, 如果说前面的 _create_driver_package 是"生产零件", 那么这个 _install_driver 就是最后的"总装上线". 它的任务是将已经编译好的内核模块(.ko 文件)正式安装到系统的内核模块路径中.
+# 研究员视家的深度解析: 为什么要这么写?
+# 从底层架构设计来看, 这个简单的函数解决了三个核心问题:
+# 1. 为什么只用 nvidia-installer 安装"内核模块"?
+# 你会发现这里使用了 --kernel-module-only 参数.
+# 设计逻辑: 在 Kubernetes 环境下, 我们追求的是 "内核态与用户态的解耦".
+# 深层原因: 内核模块(nvidia.ko)必须精准匹配宿主机内核, 所以必须现场编译安装; 而用户态库(libcuda.so)是相对通用的. 在容器启动的早期, 脚本已经通过解压的方式放好了用户态组件. 这里调用 nvidia-installer 仅仅是为了完成最后一步: 将生成的模块文件拷贝到 /lib/modules/ 并更新内核模块依赖表.
+# 2. 幂等性与"强制清理"逻辑
+# 代码中执行了 rm -rf /lib/modules/.../video.
+# 为什么要这么写: 在 K8s 集群中, Pod 可能会反复重启(CrashLoopBackOff). 如果前一次安装留下了一个坏的驱动文件, 或者宿主机原本预装了一个不同版本的驱动, nvidia-installer 可能会报错或发生覆盖失败.
+# 研究员视角: 直接删除标准路径是最彻底的复位手段, 确保了安装过程的确定性.
+# 3. 为什么不手动 cp 而是用 nvidia-installer?
+# 既然我们已经编译好了 .ko 文件, 为什么不直接 cp 到目录里呢?
+# 为什么要这么写: nvidia-installer 在执行过程中不仅是拷贝文件, 它还会:
+# 校验模块的内部签名.
+# 处理模块符号的关联.
+# 最重要的是, 它会确保内核模块的安装记录符合 NVIDIA 官方的预设逻辑, 方便后续通过 nvidia-uninstall 清理. 使用官方工具比手动 cp 更加稳健.
+# 4. 处理隔离与特权(Privileged)
+# 环境背景: 这个函数执行时, 容器是拥有 CAP_SYS_MODULE 权限的.
+# 为什么要这么写: 它写入的路径 /lib/modules 通常是从宿主机挂载进来的(hostPath). 这意味着, 虽然命令在容器里跑, 但文件直接写进了宿主机的内核路径, 从而实现了 "容器内安装, 全系统生效".
+# 总结建议:
+# 这个函数是驱动安装的"临门一脚". 作为研究人员, 我在调试时通常会关注以下两点:
+# 路径匹配: 如果宿主机的内核模块路径非标准, 这里的 rm -rf 可能会删错地方或者没删掉旧驱动, 导致新驱动加载失败.
+# --no-drm 参数: 如果你正在构建一个需要图形显示的 K8s 节点(如虚拟桌面 VDI 场景), 可能需要去掉这个参数. 但对于 AI 训练和推理, 保持 --no-drm 是目前最成熟、最稳定的做法.
+
+# Mount the driver rootfs into the run directory with the exception of sysfs.
+# --- 函数: 挂载驱动根文件系统 ---
+_mount_rootfs() {
+    echo "Mounting NVIDIA driver rootfs..."
+    # 1. 改变 /sys 的挂载属性为不可解绑 (Runbindable)
+    # 作用: 防止该挂载点成为递归绑定挂载的源.
+    # 为什么要这么写: 这是为了防止在执行递归绑定挂载时出现无限循环或不必要的挂载传播冲突.
+    mount --make-runbindable /sys
+    # 2. 改变 /sys 的挂载属性为私有 (Private)
+    # 作用: 确保在该挂载点下的任何挂载/卸载事件都不会传播到其他命名空间, 也不会从其他空间接收事件.
+    mount --make-private /sys
+    # 3. 创建目标路径
+    # RUN_DIR 通常被映射为宿主机的某个 hostPath(如 /run/nvidia).
+    mkdir -p ${RUN_DIR}/driver
+    # 4. 递归绑定挂载 (Recursive Bind Mount) —— 核心步骤
+    # 作用: 将容器自身的根目录 (/) 完整地挂载到 ${RUN_DIR}/driver 目录下.
+    # 为什么要这么写: 这是"逃逸"的关键. 容器内安装好的驱动库(/usr/lib)、工具(/usr/bin)
+    # 都通过这个操作, 投射到了宿主机可见的共享目录下.
+    mount --rbind / ${RUN_DIR}/driver
+}
+
+# Unmount the driver rootfs from the run directory.
+# --- 函数: 从运行目录卸载驱动根文件系统 ---
+_unmount_rootfs() {
+    echo "Unmounting NVIDIA driver rootfs..."
+    # 1. 检查挂载点是否存在
+    # 使用 findmnt 检查目标路径是否仍处于挂载状态.
+    if findmnt -r -o TARGET | grep "${RUN_DIR}/driver" >/dev/null; then
+        # 2. 递归懒卸载 (Recursive Lazy Unmount)
+        # -R: 递归卸载(因为挂载时用了 --rbind, 下面会有很多子挂载点).
+        # -l: 懒卸载 (Lazy). 立即从文件系统树中摘除挂载点, 即使当前有进程正在使用.
+        # 为什么要这么写: 驱动 Pod 停止时, 可能还有其他业务 Pod(如训练任务)正在调用显卡驱动库.
+        # 使用 -l 可以保证驱动 Pod 能够顺利退出, 而不会因为"device is busy"卡死,
+        # 且已经加载的进程可以继续运行直到结束.
+        umount -l -R ${RUN_DIR}/driver
+    fi
+}
+# 在 gpu-driver-container 项目中, _mount_rootfs 和 _unmount_rootfs 是实现 "驱动容器化" 最核心的"黑魔法"之一.
+# 它们解决了驱动安装中最难的一环: 容器内的驱动文件如何"逃逸"并共享给宿主机及其他 Pod 使用?
+# 研究员视角的深度解析: 为什么要这么写?
+# 作为一名高级研究人员, 我们需要透视这两行命令背后的 "Side-loading(侧加载)" 架构设计:
+# 1. 容器化驱动的"出口"难题
+# 在 Kubernetes 中, Pod 的文件系统是隔离的. 驱动容器在自己的 /usr/lib/ 里装好了 libcuda.so, 但宿主机上的 kubelet 和其他 Pod 根本看不见.
+# 解决方案: 通过 Kubernetes 的 hostPath 卷, 我们将宿主机的 /run/nvidia 映射到容器内的 ${RUN_DIR}.
+# 代码意图: mount --rbind / ${RUN_DIR}/driver 操作直接把容器的整个家底(包括安装好的驱动工具、动态库、二进制文件)映射回了宿主机. 这样, 宿主机只需要访问 /run/nvidia/driver/usr/lib/... 就能拿到驱动库.
+# 2. 为什么是 --rbind / 而不是只拷贝文件?
+# 效率与原子性: 拷贝几百 MB 的库文件很慢, 且可能导致不一致. mount --rbind 是秒级的, 且保证了文件视图的绝对一致.
+# 动态性: 驱动容器内的软链接(symlinks)非常多, 如果只拷文件, 软链接会失效. 通过绑定挂载整个根目录, 所有的路径关系(如 /usr/lib 指向 /lib)在映射后依然保持完美.
+# 3. 命名空间的隔离与传播控制 (--make-private)
+# 为什么要这么写: 在复杂的 Kubernetes 节点上, 可能运行着 systemd 这种会监听挂载事件的服务. 如果不将 /sys 设置为 private 和 runbindable, 容器内部的挂载操作可能会触发宿主机文件系统的连锁反应, 甚至导致内核死锁.
+# 安全考量: 它确保驱动容器的挂载逻辑被局限在当前的上下文中, 不会对宿主机的其他挂载点产生副作用.
+# 4. 懒卸载 (umount -l) 的生存哲学
+# 痛点: 如果你直接执行 umount, 一旦有任何一个 Python 进程(如 PyTorch)还在使用 GPU 驱动库, 卸载就会失败.
+# 为什么要这么写: 在云原生环境下, 驱动 Pod 升级或重启是常有的事. 使用 -l 选项:
+# 驱动 Pod 可以立即声明"我已经成功卸载并退出".
+# 已经在运行的业务进程不会崩溃, 它们会持有一个指向已摘除挂载点的"幽灵引用", 直到进程结束.
+# 新版本的驱动 Pod 可以立即启动并接管该挂载点.
+# 总结建议
+# 这两段代码展示了 NVIDIA 对 Linux Mount Namespace 和 Propagation(挂载传播) 的极致利用.
+# 研究员提醒:
+# 如果你在调试时发现宿主机 /run/nvidia/driver 目录为空, 或者在 Pod 删除后宿主机依然残留大量挂载点, 通常是因为:
+# Kubernetes 的 mountPropagation 没有设置为 Bidirectional.
+# _unmount_rootfs 因为权限或逻辑判断没能成功触发.
+# 通过这两段代码, 驱动镜像不再仅仅是一个"安装器", 而是一个"动态文件服务器", 将驱动能力以挂载点的形式注入到整个宿主机生态中.
+
+# Write a kernel postinst.d script to automatically precompile packages on kernel update (similar to DKMS).
+_write_kernel_update_hook() {
+    # 1. 检查目标目录是否存在
+    # ${KERNEL_UPDATE_HOOK%/*} 是 Shell 扩展, 意为删除最后一个 / 及其后的内容, 即获取父目录路径.
+    # 路径通常是 /run/kernel/postinst.d/, 对应宿主机的 /etc/kernel/postinst.d/.
+    if [ ! -d ${KERNEL_UPDATE_HOOK%/*} ]; then
+        return
+    fi
+
+    echo "Writing kernel update hook..."
+    # 2. 写入钩子脚本内容
+    # 使用 <<'EOF' 确保脚本内的 $ 符号在写入时不被当前 Shell 解析, 而是原样写入文件.
+    cat >${KERNEL_UPDATE_HOOK} <<'EOF'
+#!/bin/bash
+
+set -eu
+# 错误陷阱: 如果更新失败, 打印错误并正常退出(exit 0), 防止阻塞整个操作系统的内核升级流程.
+trap 'echo "ERROR: Failed to update the NVIDIA driver" >&2; exit 0' ERR
+
+# A. 从之前 init 阶段保存的 PID 文件中获取驱动容器主进程的 PID.
+NVIDIA_DRIVER_PID=$(< /run/nvidia/nvidia-driver.pid)
+
+# B. 环境对齐: 从驱动容器进程的 /proc 目录中提取 DRIVER_VERSION 环境变量.
+# grep -z 处理以 \0 分隔的环境变量块, 确保 update 脚本知道要处理哪个版本的驱动.
+export "$(grep -z DRIVER_VERSION /proc/${NVIDIA_DRIVER_PID}/environ)"
+
+ C. 跨空间执行 (关键步骤):
+# nsenter: 这是一个强大的系统工具, 允许进程"进入"另一个进程的命名空间.
+# -t "${NVIDIA_DRIVER_PID}": 指向驱动容器的主进程.
+# -m: 进入该进程的 Mount Namespace(挂载命名空间).
+# -- nvidia-driver update --kernel "$1":
+#    在容器的环境里执行脚本自身的 update 命令.
+#    "$1" 是内核 postinst.d 脚本传入的第一个参数, 即新安装的内核版本号.
+nsenter -t "${NVIDIA_DRIVER_PID}" -m -- nvidia-driver update --kernel "$1"
+EOF
+    # 3. 赋予执行权限
+    chmod +x ${KERNEL_UPDATE_HOOK}
+}
+# 在传统的 Linux 运维中, 内核升级是 GPU 驱动的"天敌". 通常我们需要依靠 DKMS(Dynamic Kernel Module Support)在宿主机上监听内核变化并重编驱动. 但在 Kubernetes + 驱动容器 的架构下, 宿主机通常是精简的(甚至没有 GCC), 这就产生了一个矛盾: 宿主机升级了内核, 但编译环境却在容器里.
+# 这个函数就是为了解决这个矛盾而设计的"桥梁". 它在宿主机上植入一个钩子, 利用 nsenter 跨越容器边界, 实现了一套"云原生风格的 DKMS".
+# 研究员视角的深度解析: 为什么要这么写?
+# 作为一名研究人员, 我们需要透视这段代码背后的跨界协同设计:
+# 1. 实现"云原生 DKMS"
+# 挑战: 传统的驱动安装是在宿主机装 GCC. 但在 K8s 节点上, 宿主机往往没有编译环境.
+# 设计逻辑: 通过在宿主机的 /etc/kernel/postinst.d/ 放置脚本, 系统每当安装新内核(apt upgrade 或 yum update)时, 都会自动运行这个钩子.
+# 为什么要这么写: 这保证了驱动的自愈性. 即便管理员在凌晨自动升级了内核, 驱动容器也能在新内核生效前(或重启后)自动完成编译, 避免节点因为"驱动丢失"而在 K8s 中进入 NotReady 状态.
+# 2. 利用 nsenter 穿透容器隔离
+# 挑战: 宿主机的钩子脚本只有基本的逻辑, 它没有 NVIDIA 驱动源码, 也没有 nvcc.
+# 设计逻辑: nsenter -t PID -m 是整段代码的灵魂.
+# 为什么要这么写: 它让宿主机的进程临时"变身"进入容器内部. 容器里有完整的编译工具链和驱动源码. 这种"宿主机触发、容器内执行"的模式, 既利用了宿主机的系统事件, 又保持了容器作为"工具箱"的封闭性.
+# 3. 环境变量的动态继承
+# 挑战: 宿主机的 Shell 环境没有 DRIVER_VERSION 变量.
+# 设计逻辑: grep -z DRIVER_VERSION /proc/.../environ.
+# 为什么要这么写: 驱动容器可能在运行 550 版本, 也可能在运行 535 版本. 通过直接读取 /proc 下进程的环境变量, 钩子脚本能实时获取当前"存活"容器的配置. 这是一种非常硬核且可靠的跨进程元数据发现机制.
+# 4. 容错性与非阻塞设计
+# 设计逻辑: trap ... exit 0.
+# 为什么要这么写: 内核升级是操作系统的关键任务. 如果因为 GPU 驱动编译失败导致 apt-get 报错中断, 可能会导致系统处于损坏状态. 设置 exit 0 是为了确保驱动安装的失败不会破坏系统层面的内核更新.
+# 总结
+# _write_kernel_update_hook 是 NVIDIA 驱动容器化方案中最体现"架构师思维"的部分. 它通过 Linux Post-install Hook + Namespace Penetration (nsenter), 在完全不污染宿主机环境的前提下, 实现了硬件驱动对操作系统内核变更的自动适配.
+# 研究员提醒:
+# 如果你发现宿主机内核升级后 GPU 无法工作, 第一检查点就是宿主机的 /etc/kernel/postinst.d/update-nvidia-driver(通常是链接到容器挂载路径)是否存在, 以及容器的 PID 文件是否准确. 如果 nsenter 找不到对应的 PID, 这个自愈机制就会失效.
+
+_shutdown() {
+    # 1. 首先尝试卸载驱动内核模块
+    # 调用之前解析过的 _unload_driver 函数.
+    # 逻辑: 只有当内核模块成功卸载(即没有业务进程在使用 GPU)时, 才继续后续清理.
+    if _unload_driver; then
+        # 2. 取消文件系统挂载映射
+        # 作用: 调用 _unmount_rootfs, 撤销之前通过 --rbind 投射到宿主机的共享目录.
+        # 为什么要这么写: 如果模块卸载成功, 说明已经没有进程依赖这些库,
+        # 此时断开与宿主机的"共享桥梁"是安全的.
+        _unmount_rootfs
+        # 3. 清理状态文件与钩子
+        # PID_FILE: 存储当前驱动进程 PID 的文件.
+        # KERNEL_UPDATE_HOOK: 植入宿主机的内核更新自动化脚本.
+        # 作用: 删除这些宿主机上的持久化文件, 不留"垃圾".
+        rm -f ${PID_FILE} ${KERNEL_UPDATE_HOOK}
+        # 返回成功
+        return 0
+    fi
+    # 4. 失败处理
+    # 如果 _unload_driver 失败(例如还有业务 Pod 在用显卡), 则跳过清理并返回错误.
+    # 为什么要这么写: 这是一种保护机制, 防止强制清理导致正在运行的业务进程崩溃.
+    return 1
+}
+# 在驱动管理中, "退出逻辑" 的重要性不亚于安装逻辑. 在 Kubernetes 环境下, 当驱动 Pod 因为版本更新、节点维护或手动删除而停止时, 如果它留下一堆"半死不活"的内核模块和残余的挂载点, 会导致宿主机陷入不稳定状态, 甚至需要物理重启才能恢复.
+# 这个函数是驱动容器的 "善后处理中心". 它的核心目标是: 在容器销毁前, 尽可能地将宿主机恢复到安装驱动之前的纯净状态.
+# 研究员视角的深度解析: 为什么要这么写?
+# 作为一名高级研究员, 我们需要从 "节点一致性" 和 "优雅退出(Graceful Shutdown)" 的角度来理解这个函数的精妙之处:
+# 1. 严格的倒序操作(Dependency Inversion)
+# 设计原则: 关闭顺序必须与开启顺序完全相反.
+# 为什么要这么写:
+# 安装顺序: 编译 -> 加载模块 -> 挂载 Rootfs -> 写入 Hook.
+# 退出顺序: 卸载模块 -> 取消挂载 -> 删除 Hook.
+# 如果在模块还没卸载(硬件仍被锁定)时就先删了 PID 文件或卸载了库文件, 宿主机会处于一个极其尴尬的状态: 驱动还在内核里跑, 但你已经找不到它的管理入口了.
+# 2. "防御性"的清理逻辑
+# 逻辑细节: 注意 if _unload_driver; then 这个条件判断.
+# 为什么要这么写:
+# 在 Kubernetes 中, 如果用户执行 kubectl delete pod, 容器会收到信号触发 _shutdown.
+# 如果此时节点上还有一个 PyTorch 任务在跑, _unload_driver 会发现引用计数不为零, 从而返回失败(1).
+# 此时 _shutdown 故意不去执行 _unmount_rootfs.
+# 深度原因: 如果强行 unmount, 那个 PyTorch 任务在调用 libcuda.so 时会因为找不到文件直接 Segment Fault. 不执行清理, 至少能保证存量业务能"带伤"运行直到结束, 这体现了对业务稳定性的敬畏.
+# 3. 抹除"入侵"痕迹(Cleanup the Footprints)
+# 代码细节: rm -f ${KERNEL_UPDATE_HOOK}.
+# 为什么要这么写:
+# 驱动容器通过 hostPath 往宿主机的 /etc/kernel/postinst.d/ 写入了脚本.
+# 如果不删除这个脚本, 当驱动 Pod 已经不复存在时, 宿主机下次升级内核仍会尝试调用一个不存在的 PID 或容器.
+# 研究员视角: 容器化基础设施的一个核心指标是 "可撤销性". _shutdown 确保了驱动容器不仅是绿色的(不污染环境), 还是可彻底回收的.
+# 4. 配合 trap 机制的闭环
+# 背景知识: 在 init 函数中, 你会看到 trap "_shutdown" EXIT.
+# 为什么要这么写:
+# 容器可能因为 OOM(内存溢出)、信号杀掉或其他意外退出.
+# trap 保证了无论容器是因为什么原因"死掉", 都会尝试跳到 _shutdown 执行一次清理. 这是构建 "高可用硬件网关(GPU Gateway)" 的标准工业实践.
+# 总结
+# _shutdown 并不是简单的"删除", 它是驱动容器的 "状态回收站".
+# 研究员建议:
+# 如果你在 K8s 运维中发现某个节点的 GPU 状态异常, 无法重装驱动, 通常是因为 _shutdown 失败了(例如由于驱动被占用, 导致旧驱动没卸载干净). 此时你应该:
+# 手动清理宿主机的 PID_FILE.
+# 确认没有僵尸进程占用 /dev/nvidia*.
+# 通过这个函数的逻辑手动执行一次 rmmod.
+# 通过深入理解这个函数, 你就掌握了容器化驱动生命周期的"终点站".
+
+# --- 函数: 在 vGPU 环境下动态寻找并匹配正确的驱动版本 ---
+_find_vgpu_driver_version() {
+    local count=""
+    local version=""
+
+    # 1. 跳过机制
+    # 为什么要这么写: 给高级用户留一个"逃生舱". 如果用户通过环境变量明确表示
+    # 已经处理好了版本, 或者想强制使用某个版本, 脚本不应干预.
+    if [ "${DISABLE_VGPU_VERSION_CHECK}" = "true" ]; then
+        echo "vgpu version compatibility check is disabled"
+        return 0
+    fi
+    # check if vgpu devices are present
+    # 2. 探测物理环境: 检查宿主机是否分配了 vGPU 设备
+    # vgpu-util 是 NVIDIA 专门为容器化驱动开发的工具.
+    # count 命令会检查当前的虚拟 PCI 设备.
+    count=$(vgpu-util count)
+    if [ $? -ne 0 ]; then
+        # 如果报错, 通常说明硬件不具备 vGPU 特性. 此时脚本选择温和退出, 不阻塞后续流程.
+        echo "cannot find vgpu devices on host, pleae check /var/log/vgpu-util.log for more details..."
+        return 0
+    fi
+    # 3. 区分 vGPU 与直通模式
+    # 从 vgpu-util 的输出中提取设备数量(例如输出为 count=2)
+    NUM_VGPU_DEVICES=$(echo "$count" | awk -F= '{print $2}')
+    if [ $NUM_VGPU_DEVICES -eq 0 ]; then
+        # no vgpu devices found, treat as passthrough
+        # 为什么要这么写: 如果数量为 0, 说明当前 GPU 是以物理直通方式给到 Pod 的.
+        # 直通模式不需要复杂的版本匹配, 脚本将其视为普通 GPU 处理.
+        return 0
+    fi
+    echo "found $NUM_VGPU_DEVICES vgpu devices on host"
+
+    # find compatible guest driver using drive catalog
+    # 4. 核心: 动态版本匹配 (Version Matching)
+    # 作用: 调用 vgpu-util match, 对比当前宿主机的内核/驱动状态与
+    # /drivers 目录下的 vgpuDriverCatalog.yaml(驱动目录索引).
+    # 为什么要这么写: vGPU 的 Guest 驱动必须在 Host 驱动支持的范围内.
+    # 这个工具会自动在多个可用的驱动安装包(.run)中选出最合适的一个.
+    version=$(vgpu-util match -i /drivers -c /drivers/vgpuDriverCatalog.yaml)
+    if [ $? -ne 0 ]; then
+        # 如果匹配不到, 说明当前镜像里没有适合宿主机的驱动包, 此时必须报错退出.
+        echo "cannot find match for compatible vgpu driver from available list, please check /var/log/vgpu-util.log for more details..."
+        return 1
+    fi
+    # 5. 更新全局变量
+    # 将匹配到的版本号赋值给 DRIVER_VERSION, 供后续的 sh NVIDIA-Linux-xxx.run 使用.
+    DRIVER_VERSION=$(echo "$version" | awk -F= '{print $2}')
+    echo "vgpu driver version selected: ${DRIVER_VERSION}"
+    return 0
+}
+
+# --- 函数: 启动 vGPU 拓扑感知守护进程 ---
+_start_vgpu_topology_daemon() {
+    # 1. 检查二进制文件是否存在
+    # type 命令检查 nvidia-topologyd 是否在系统的 PATH 中.
+    # 为什么要这么写: 老版本驱动或精简版包可能不包含此工具, 直接运行会报错.
+    type nvidia-topologyd >/dev/null 2>&1 || return 0
+
+    # 2. 启动进程
+    # 为什么要这么写: 在 vGPU 这种虚拟化环境下, GPU 看到的 PCI 拓扑是虚拟的.
+    # nvidia-topologyd 负责将底层的真实 NVLink 或 PCIe 拓扑信息传递给
+    # 计算库(如 NCCL), 确保多卡并行训练时的带宽最大化.
+    echo "Starting nvidia-topologyd.."
+    nvidia-topologyd
+}
+# 在 NVIDIA 的生态中, vGPU(Virtual GPU) 是最复杂的部署场景之一. 与普通的"直通(Passthrough)"模式不同, vGPU 需要宿主机(Host)驱动与虚拟机/容器(Guest)驱动版本高度兼容. 如果版本不匹配, GPU 将无法初始化, 报错 RM Discovery Error.
+# 这两段代码的核心任务是: 实现 vGPU 环境下的"版本自适应"与"虚拟拓扑优化".
+# 研究员视角的深度解析: 为什么要这么写?
+# 作为一名研究人员, 我们需要透视 NVIDIA 在 vGPU 容器化上的三个核心设计考量:
+# 1. 解决"镜像版本死锁"问题
+# 在直通模式下, 你可以随意升级镜像里的驱动版本. 但在 vGPU 环境下, 如果宿主机是 15.x 版本, 镜像里的驱动如果是 14.x 或 16.x 往往会工作异常.
+# 设计逻辑: _find_vgpu_driver_version 实际上把驱动容器变成了一个 "智能分发器". 镜像里可以包含多个驱动包(例如同时存 15.1, 15.2, 15.3), 脚本在启动瞬间"嗅探"宿主机环境, 然后选择对应的包进行安装. 这极大地提高了镜像在异构 vGPU 集群中的通用性.
+# 2. vGPU 驱动目录索引 (vgpuDriverCatalog.yaml)
+# 为什么要这么写: 这是一个映射表. 随着驱动版本的迭代, Host 和 Guest 的兼容关系非常复杂. 通过一个外部的 YAML 文件来维护这种关系, 而不是硬编码在 Shell 脚本里, 符合 "解耦" 的工程原则.
+# 3. 性能优化: 虚拟拓扑的"真相"
+# 背景知识: 在高性能计算(HPC)或深度学习中, 显卡间的通信(P2P)速度至关重要. vGPU 系统通过软件模拟了显卡.
+# 为什么要启动 nvidia-topologyd:
+# 如果没有这个 daemon, CUDA 程序(如 PyTorch 的分布式训练)会认为显卡之间是互相隔离的, 从而退回到缓慢的系统内存拷贝. nvidia-topologyd 像一个"导航员", 告诉容器内部的应用: "虽然你在虚拟机里, 但你依然可以通过 NVLink 快速访问隔壁那张卡."
+# 4. 容错性与平滑降级
+# 代码意图: 你会注意到脚本中多处使用了 return 0 即使在找不到设备时.
+# 为什么要这么写: 这是为了确保 "普适性". 同一个驱动镜像可能被部署到有 GPU 的节点, 也可能被误部署到没有 GPU 的节点. 通过这种逻辑, 脚本在遇到"非 vGPU 环境"时会自动"滑过去", 而不是直接 Crash, 这保证了 Kubernetes DaemonSet 的整体稳定性.
+# 总结
+# 这两段代码是 NVIDIA 对 "软件定义 GPU 基础设施" 的完美实践. 它让驱动安装不再是一个死板的执行过程, 而变成了一个 "环境感知 -> 策略匹配 -> 性能优化" 的智能链条.
+# 研究员提醒:
+# 如果你在 vGPU 环境下遇到 nvidia-smi 没反应, 或者 NCCL 报错, 请检查日志看 vgpu-util match 是否选对了版本, 以及 nvidia-topologyd 是否因为权限问题没起来.
+
+init() {
+    # --- 1. vGPU 动态版本匹配 ---
+    # 如果是 vGPU 环境(如 GRID 虚拟化), 驱动版本通常必须与宿主机的物理机管理版本严格匹配.
+    # 为什么要这么写: vGPU 客户端驱动不是随意的, 需要通过逻辑在线查找或匹配宿主机版本.
+    if [ "${DRIVER_TYPE}" = "vgpu" ]; then
+        _find_vgpu_driver_version || exit 1
+    fi
+
+    # Install the userspace components and copy the kernel module sources.
+    # --- 2. 提取驱动包与安装用户态组件 ---
+    # 这一步是"解耦"的核心: 将 .run 脚本解压, 并只安装不含内核模块的部分.
+    # -x: 仅解压.
+    sh NVIDIA-Linux-$DRIVER_ARCH-$DRIVER_VERSION.run -x &&
+        cd NVIDIA-Linux-$DRIVER_ARCH-$DRIVER_VERSION &&
+        # 为什么要这么多 --no-* 参数:
+        # 我们是在容器内运行安装程序, 不希望它动宿主机的配置.
+        # --no-kernel-module: 关键! 此时先不装内核模块, 只装 libcuda.so 等用户态库.
+        # --x-*: 将 X11 相关的路径指向 /tmp/null, 因为 GPU 服务器通常是 Headless(无显示器)的.
+        ./nvidia-installer --silent \
+            --no-kernel-module \
+            --no-nouveau-check \
+            --no-nvidia-modprobe \
+            --no-rpms \
+            --no-backup \
+            --no-check-for-alternate-installs \
+            --no-libglx-indirect \
+            --no-install-libglvnd \
+            --x-prefix=/tmp/null \
+            --x-module-path=/tmp/null \
+            --x-library-path=/tmp/null \
+            --x-sysconfig-path=/tmp/null &&
+        # 将内核源码和工具移动到标准路径, 方便后续编译
+        mkdir -p /usr/src/nvidia-${DRIVER_VERSION} &&
+        mv LICENSE mkprecompiled ${KERNEL_TYPE} /usr/src/nvidia-${DRIVER_VERSION} &&
+        # 为什么要用 sed 处理 .manifest:
+        # 清理安装清单, 只保留内核模块和授权文件相关的记录, 减少冗余, 保持环境整洁.
+        sed '9,${/^\(kernel\|LICENSE\)/!d}' .manifest >/usr/src/nvidia-${DRIVER_VERSION}/.manifest
+
+    echo -e "\n========== NVIDIA Software Installer ==========\n"
+    echo -e "Starting installation of NVIDIA driver version ${DRIVER_VERSION} for Linux kernel version ${KERNEL_VERSION}\n"
+
+    # --- 3. 进程锁与排他性检查 ---
+    # 使用文件描述符 3 打开 PID 文件.
+    exec 3>${PID_FILE}
+    # 为什么要这么写: flock -n 3 实现非阻塞文件锁.
+    # 驱动操作涉及内核模块加载, 绝对不允许两个实例同时操作硬件.
+    if ! flock -n 3; then
+        echo "An instance of the NVIDIA driver is already running, aborting"
+        exit 1
+    fi
+    # 将当前进程 PID 写入文件, 锁定成功.
+    echo $$ >&3
+
+    # --- 4. 信号处理 (Traps) ---
+    # 为什么要这么写: 容器化环境中, K8s 可能会随时销毁 Pod.
+    # trap 确保在收到中止信号时执行 _shutdown(卸载驱动、清理挂载), 防止残留驱动导致节点重启失败.
+    trap "echo 'Caught signal'; exit 1" HUP INT QUIT PIPE TERM
+    trap "_shutdown" EXIT
+
+    # --- 5. 清理旧环境 ---
+    # 在尝试安装前, 先卸载已有的内核模块并取消挂载.
+    # 为什么要这么写: 保证"幂等性", 无论之前状态如何, 都从零开始.
+    _unload_driver || exit 1
+    _unmount_rootfs
+
+    # --- 6. 动态编译流程 (核心中的核心) ---
+    # 检查当前内核环境是否已经有了对应的预编译包.
+    if _kernel_requires_package; then
+        _update_ca_certificates
+        _update_package_cache
+        # 解析内核版本, 下载对应的 kernel-headers
+        _resolve_kernel_version || exit 1
+        # 准备编译环境
+        _install_prerequisites
+        # 现场编译 nvidia.ko 等内核模块
+        _create_driver_package
+        # 编译完后, 可以选择清理掉几百 MB 的 headers 节省空间(此处源码中被注释掉了)
+        #_remove_prerequisites
+        #_cleanup_package_cache
+    fi
+
+    # --- 7. 安装与加载 ---
+    # 执行真正的安装(拷贝 .ko 文件)
+    _install_driver
+    # 加载内核模块 (modprobe)
+    _load_driver || exit 1
+    # 关键! 挂载 rootfs 到宿主机可见路径
+    # 为什么要这么写: 容器内的驱动库需要通过 mount --rbind 共享给宿主机,
+    # 这样宿主机上的其他 Pod 才能通过宿主机路径找到这些 .so 文件.
+    _mount_rootfs
+    # 写入内核更新钩子, 防止宿主机升级内核后驱动失效
+    _write_kernel_update_hook
+
+    # --- 8. 守护进程持久化 ---
+    # 为什么要这么写: 在 K8s 中, DaemonSet 容器必须保持 Running 状态.
+    # 如果脚本运行完就退出, K8s 会认为容器已完成而将其重启.
+    echo "Done, now waiting for signal"
+    # 后台运行 sleep 保持进程不退
+    sleep infinity &
+    # 捕获信号并优雅退出
+    trap "echo 'Caught signal'; _shutdown && { kill $!; exit 0; }" HUP INT QUIT PIPE TERM
+    trap - EXIT
+    # 循环等待, 直到被外部信号杀掉
+    while true; do wait $! || continue; done
+    exit 0
+}
+# 这段 init() 函数是 nvidia-driver-container 项目的"心脏".
+# 它的核心任务是实现 "驱动即服务(Driver-as-a-Service)". 在 Kubernetes 集群中, 我们不再手动给每台机器装驱动, 而是通过这个脚本, 在容器启动时动态地、自动化地完成驱动的"解压、编译、安装、加载、共享"全生命周期管理.
+# 高级研究员视角的"为什么":
+# 1. 为什么要区分用户态和内核态安装?
+# 在脚本前半部分, 我们看到 nvidia-installer 加上了 --no-kernel-module.
+# 深层理由: 容器镜像在构建时, 我们不知道宿主机的内核版本. 因此, 我们把 "不需要编译的库"(用户态 libcuda.so 等)预先安装好, 而将 "必须编译的模块"(内核态 nvidia.ko)留到容器启动时(Runtime)现场根据宿主机内核动态编译. 这实现了镜像的通用性.
+# 2. 为什么要使用文件锁 flock?
+# 深层理由: 硬件资源是唯一的. 在大型 K8s 集群中, 可能会因为调度错误或手动操作导致一个节点上运行两个驱动容器. 如果两个容器同时尝试往内核里 insmod 模块, 或者同时写入 /dev/nvidia*, 会导致内核崩溃(Kernel Panic). 文件锁是分布式环境下保证硬件操作原子性的最后一道防线.
+# 3. 为什么要使用 mount --mount-rootfs?
+# 深层理由: 这是一个典型的 "Side-loading" 模式.
+# 驱动容器运行在自己的文件系统中, 但它把自己的磁盘目录(含有已加载驱动的库)通过 mount --rbind 映射到了宿主机的 /run/nvidia/driver 下.
+# 这样一来, 宿主机上的 Kubelet 和其他业务 Pod 即使不装驱动, 也能"看"到驱动容器提供出来的库.
+# 4. 为什么要 sleep infinity?
+# 深层理由: 驱动容器的角色是 "守护进程(Daemon)".
+# 除了安装驱动, 它还负责维护 nvidia-persistenced(持久化守护进程, 保持 GPU 状态不丢失). 如果容器退出了, 这些进程会被杀死, GPU 可能会进入低功耗状态或重置, 导致业务中断.
+# 总结建议:
+# 这段脚本展现了 NVIDIA 在处理"异构内核"和"容器隔离"矛盾时的高度智慧. 它不仅是一个安装脚本, 更是一个精密的 内核模块编排器. 如果你在调试时遇到问题, 通常需要查看 flock 是否冲突, 或者 _resolve_kernel_version 是否下载到了正确的 headers.
+
+update() {
+    # --- 1. 高级日志劫持与重定向 (Shell "Magic") ---
+    # 为什么要这么写: update 进程是由宿主机 nsenter 触发的, 它的 stdout/stderr 默认会丢失.
+    # 为了让管理员通过 'kubectl logs' 看到更新进度, 必须把输出"塞回"给 init 进程.
+
+    exec 3>&2 # 将当前的 stderr 备份到文件描述符 3
+    # 尝试打开 PID_FILE 并关联到文件描述符 4
+    if exec 2>/dev/null 4<${PID_FILE}; then
+        # 尝试非阻塞锁定 (flock -n). 如果锁失败, 说明 init 进程持有锁(正在运行).
+        # kill -0 检查该 PID 进程是否真的存活.
+        if ! flock -n 4 && read pid <&4 && kill -0 "${pid}"; then
+            # 关键: 利用 /proc/${pid}/fd/1, 将当前脚本的输出追加到 init 进程的输出流中.
+            # 这样, 你在 kubectl logs 中就能看到这个后台更新进程的日志了.
+            exec > >(tee -a "/proc/${pid}/fd/1")
+            exec 2> >(tee -a "/proc/${pid}/fd/2" >&3)
+        else
+            exec 2>&3 # 如果 init 没运行, 恢复 stderr
+        fi
+        exec 4>&- # 关闭临时描述符 4
+    fi
+    exec 3>&- # 关闭备份描述符 3
+
+    # vgpu driver version is choosen dynamically during runtime, so pre-compile modules for
+    # only non-vgpu driver types
+    # --- 2. 源码环境准备 (非 vGPU 类型) ---
+    # vGPU 的驱动是动态匹配的, 不适合提前预编译.
+    if [ "${DRIVER_TYPE}" != "vgpu" ]; then
+        # Install the userspace components and copy the kernel module sources.
+        # 如果源码目录尚未解压, 则执行解压和工具初始化
+        if [ ! -e /usr/src/nvidia-${DRIVER_VERSION}/mkprecompiled ]; then
+            # 这里复用了 init() 里的逻辑: 解压 .run 包并安装用户态组件
+            sh NVIDIA-Linux-$DRIVER_ARCH-$DRIVER_VERSION.run -x &&
+                cd NVIDIA-Linux-$DRIVER_ARCH-$DRIVER_VERSION &&
+                ./nvidia-installer --silent \
+                    --no-kernel-module \
+                    --no-nouveau-check \
+                    --no-nvidia-modprobe \
+                    --no-rpms \
+                    --no-backup \
+                    --no-check-for-alternate-installs \
+                    --no-libglx-indirect \
+                    --no-install-libglvnd \
+                    --x-prefix=/tmp/null \
+                    --x-module-path=/tmp/null \
+                    --x-library-path=/tmp/null \
+                    --x-sysconfig-path=/tmp/null &&
+                # 移动授权文件和编译工具到指定源码目录
+                mkdir -p /usr/src/nvidia-${DRIVER_VERSION} &&
+                mv LICENSE mkprecompiled ${KERNEL_TYPE} /usr/src/nvidia-${DRIVER_VERSION} &&
+                sed '9,${/^\(kernel\|LICENSE\)/!d}' .manifest >/usr/src/nvidia-${DRIVER_VERSION}/.manifest
+        fi
+    fi
+
+    echo -e "\n========== NVIDIA Software Updater ==========\n"
+    echo -e "Starting update of NVIDIA driver version ${DRIVER_VERSION} for Linux kernel version ${KERNEL_VERSION}\n"
+
+    # 设置信号处理, 确保更新过程被中断时能正确报错退出
+    trap "echo 'Caught signal'; exit 1" HUP INT QUIT PIPE TERM
+
+    # --- 3. 核心动态构建流程 ---
+    # 这部分是"云原生版 DKMS"的实体
+    _update_package_cache             # 1. 更新容器内的包列表(为了下载新内核的 headers)
+    _resolve_kernel_version || exit 1 # 2. 解析新内核的版本字符串
+    _install_prerequisites            # 3. 下载新内核对应的 headers 和模块符号
+    # 4. 检查是否已经有针对该新内核的预编译包, 如果没有, 则现场执行编译
+    if _kernel_requires_package; then
+        _create_driver_package # 执行具体的 gcc 编译和 ld 链接
+    fi
+    # 5. 清理现场, 减小容器空间占用
+    _remove_prerequisites
+    _cleanup_package_cache
+
+    echo "Done"
+    exit 0
+}
+# 如果说 init() 是驱动容器的"出生证明", 那么 update() 就是它的"自愈基因". 在 Kubernetes 集群中, 这个函数通常不是由用户手动调用的, 而是通过我们之前提到的 宿主机内核更新钩子(Kernel Update Hook) 自动触发的.
+# 它的核心任务是: 当宿主机在运行期间升级了 Linux 内核, 驱动容器在不重启、不重建 Pod 的情况下, 在后台静默地为新内核编译好驱动模块.
+# 研究员视角的深度解析: 为什么要这么写?
+# 作为一名高级研究员, 我们需要透视这段逻辑背后的 "零停机维护" 理念:
+# 1. 为什么要有如此复杂的"日志重定向"?
+# 深层背景: 在 Kubernetes 中, 一个 Pod 只有一个主进程(PID 1). kubectl logs 抓取的是 PID 1 的输出.
+# 设计精妙点: update() 是通过宿主机的内核钩子使用 nsenter 强行挤进容器运行的"外来进程". 如果不做重定向, 更新过程如果报错, 管理员在 kubectl logs 里完全看不到, 只会发现显卡突然不能用了. 通过操作 /proc/${pid}/fd/1, NVIDIA 实现了一种"日志劫持", 让后台运维任务在前端可见.
+# 2. "懒解压" (Lazy Unpacking) 策略
+# 代码行为: 检查 /usr/src/.../mkprecompiled 是否存在.
+# 为什么要这么写: 镜像在构建时可能为了缩小体积没有解压驱动源码. update() 逻辑保证了只有在真正需要为新内核编译驱动时, 才会去消耗磁盘空间解压源码. 这是一种 "按需分配" 的资源管理方式.
+# 3. 为什么不直接执行 _install_driver?
+# 关键差异: 你会发现 update() 流程里有 _create_driver_package(编译), 但没有 _load_driver(加载).
+# 为什么要这么写:
+# 因为 update 发生时, 宿主机正在运行旧内核, 但已经下载了新内核的包.
+# 此时我们无法为"尚未启动"的新内核加载驱动.
+# 这个函数的目标是提前准备. 等到宿主机下次重启进入新内核时, init() 函数会运行, 由于 update() 已经提前把 .ko 编译好并放在了 precompiled/ 目录下, init() 就能瞬间完成"指纹匹配"并加载驱动.
+# 4. 对异构内核的静默适配
+# 为什么要这么写: 大规模集群中, 节点可能分批升级内核. update() 让驱动镜像变成了一个"驱动工厂". 只要镜像里的驱动版本(例如 550.x)支持新内核, 它就能自动产出对应的二进制包. 这解决了"节点升级内核后 GPU 掉线"的运维噩梦.
+# 总结建议
+# update() 函数是 NVIDIA GPU Operator 实现高可用性的核心. 作为研究人员, 我在排查问题时会特别关注:
+# 容器联网状态: _update_package_cache 需要联网. 如果你的 K8s 节点在内网且没有配置私有 APT 源, update 会死在这一步.
+# 磁盘空间: 如果频繁升级内核且没有清理 precompiled/ 目录, 可能会导致 /usr/src 路径占用过高.
+# PID 文件的准确性: 重定向逻辑依赖于正确的 PID_FILE. 如果由于某种原因 PID 记录错误, update 过程将变成"盲飞".
+# 通过深入理解这个函数, 你就掌握了驱动容器如何在不断变化的 Linux 环境中保持 "长治久安" 的秘密.
+
+# Wait for MOFED drivers to be loaded and load nvidia-peermem whenever it gets unloaded during MOFED driver updates
+# --- 函数: 循环等待并加载 nvidia-peermem 模块 ---
+reload_nvidia_peermem() {
+    # 1. 等待双重依赖就绪 (Sync Logic)
+    # 为什么要这么写: nvidia-peermem 是一个"三明治"模块, 它必须等 GPU 驱动和网络驱动都加载后才能加载.
+    if [ "$USE_HOST_MOFED" = "true" ]; then
+        # 情况 A: 使用宿主机预装的 Mellanox 驱动
+        # 逻辑: 循环检查 mlx5_core 是否在内核中, 以及 NVIDIA 驱动容器是否报告已就绪 (.driver-ctr-ready)
+        until lsmod | grep mlx5_core >/dev/null 2>&1 && [ -f /run/nvidia/validations/.driver-ctr-ready ]; do
+            echo "waiting for mellanox ofed and nvidia drivers to be installed"
+            sleep 10
+        done
+    else
+        # use driver readiness flag created by MOFED container
+        # 情况 B: 使用容器化安装的 Mellanox 驱动
+        # 逻辑: 多加一个检查点, 看 MOFED 容器是否创建了 .driver-ready 标志文件
+        until [ -f /run/mellanox/drivers/.driver-ready ] && [ -f /run/nvidia/validations/.driver-ctr-ready ]; do
+            echo "waiting for mellanox ofed and nvidia drivers to be installed"
+            sleep 10
+        done
+    fi
+    # get any parameters provided for nvidia-peermem
+    # 2. 获取参数并尝试加载
+    # 这里的参数可能包含内存锁定限制等调优项
+    _get_module_params && set +o nounset
+    # 关键步骤: 使用 chroot 进入之前挂载到宿主机的驱动根目录
+    # 为什么要这么写: 虽然我们在容器内, 但 modprobe 需要调用宿主机内核路径下的模块文件.
+    # 通过 chroot /run/nvidia/driver, 我们让 modprobe 认为它在宿主机的驱动环境下运行.
+    if chroot /run/nvidia/driver modprobe nvidia-peermem "${NVIDIA_PEERMEM_MODULE_PARAMS[@]}"; then
+        # 验证模块引用计数 (refcnt) 是否存在, 确认加载成功
+        if [ -f /sys/module/nvidia_peermem/refcnt ]; then
+            echo "successfully loaded nvidia-peermem module, now waiting for signal"
+            # 3. 守护状态
+            # 为什么要这么写: 这是一个 Daemon 进程, 它必须保持运行(sleep inf)来"持有"这个状态.
+            # 如果进程退出, K8s 会认为任务完成或失败而重启 Pod, 可能导致驱动状态震荡.
+            sleep inf
+            trap "echo 'Caught signal'; exit 1" HUP INT QUIT PIPE TERM
+        fi
+    fi
+    echo "failed to load nvidia-peermem module"
+    exit 1
+}
+
+# probe by gpu-opertor for liveness/startup checks for nvidia-peermem module to be loaded when MOFED drivers are ready
+# --- 函数: 为 Kubernetes 提供的探针(Liveness/Startup Probe) ---
+# 作用: 由 GPU Operator 调用, 用来判断这个"桥梁"是否搭好了
+probe_nvidia_peermem() {
+    # 1. 检查网络驱动是否在位
+    if lsmod | grep mlx5_core >/dev/null 2>&1; then
+        # 2. 如果网卡驱动在, 但 peermem 没加载, 这就是故障
+        # 为什么要这么写: 在高性能计算节点, 网卡在位却没开启 peermem 会导致 NCCL 降级到 CPU 拷贝,
+        # 训练速度可能从 100Gbps 掉到 10Gbps. 此时必须返回 1, 让 K8s 重启该 Pod.
+        if [ ! -f /sys/module/nvidia_peermem/refcnt ]; then
+            echo "nvidia-peermem module is not loaded"
+            return 1
+        fi
+    else
+        # 3. 网卡驱动不在? 跳过检查
+        # 为什么要这么写: 这是为了防止"启动死锁". 如果网卡驱动还没加载好, 我们不应该判定
+        # peermem 失败. 返回 0 告诉 K8s: "还没到时候, 再等等", 避免无限重启 Pod.
+        echo "MOFED drivers are not ready, skipping probe to avoid container restarts..."
+    fi
+    return 0
+}
+# 这两段函数的核心围绕着一个关键内核模块: nvidia-peermem.
+# 背景知识: 在分布式训练(如使用 NCCL 库)中, 我们需要 GPU 数据不经过 CPU 拷贝, 直接通过 InfiniBand 或高速以太网发送. 这需要 NVIDIA GPU 驱动与 Mellanox (OFED) 网络驱动之间深度协作. nvidia-peermem 正是这两者之间的"桥梁".
+# 研究员视角的深度解析: 为什么要这么写?
+# 作为一名研究人员, 你需要理解这段代码背后的三个硬核工程考量:
+# 1. 解决"三明治"依赖难题(Sandwich Dependency)
+# nvidia-peermem 是 Linux 内核中少见的跨厂商依赖模块.
+# 它依赖 NVIDIA 的 nvidia.ko.
+# 它同时也依赖 Mellanox 的 mlx5_core.ko.
+# 挑战: 在 Kubernetes 中, GPU 驱动 Pod 和 MOFED 驱动 Pod 是并行启动的. 谁先谁后不确定.
+# 代码方案: reload_nvidia_peermem 中的 until 循环实现了一个简单的分布式信号量(通过文件系统的标志位), 确保了加载顺序的绝对正确.
+# 2. chroot 与"驱动空间"的穿越
+# 挑战: 由于驱动容器将驱动库通过 rbind 挂载到了宿主机的 /run/nvidia/driver, 容器内部的路径结构与宿主机不一致.
+# 为什么要这么写: 直接在容器内跑 modprobe 可能会因为找不到模块路径而失败. 使用 chroot /run/nvidia/driver 实际上是"在容器内模拟宿主机的环境"来执行内核指令. 这是一种非常高级的容器穿透技术.
+# 3. 智能探针与"非惩罚性"等待
+# 背景: Kubernetes 的探针如果连续失败, 会触发 Pod 重启.
+# 设计逻辑: 在 probe_nvidia_peermem 中, 如果发现网卡驱动(mlx5_core)根本还没加载, 它会返回 0(成功).
+# 为什么要这么写: 这体现了"优雅降级"的思想. 我们不希望因为网络驱动加载慢, 就让 nvidia-peermem 容器陷入不断的 CrashLoopBackOff. 只有当"环境已就绪但模块没加载"这种真正的异常发生时, 才会触发重启.
+# 4. sleep inf 的持久化意义
+# 为什么要这么写: 在 K8s 控制逻辑中, 如果容器内的命令执行完了, Pod 就会进入 Completed 状态. 对于驱动管理容器, 我们需要它保持 Running, 以便于:
+# 接收清理信号(trap).
+# 为 Kubelet 提供持续的 Liveness 状态.
+# 防止内核模块因引用计数问题被系统意外回收.
+# 总结
+# 这两段代码是 NVIDIA GPU Operator 能够支持高性能 RDMA 网络 的关键. 它通过文件标志位实现了多容器间的状态同步, 并通过 chroot 解决了内核模块加载时的路径困境.
+# 研究员提醒:
+# 如果你在部署大规模训练集群(如 H100 集群)时发现 nvidia-smi 正常但多机训练极慢, 通常就是 nvidia-peermem 没起起来. 此时你需要检查 /run/mellanox/drivers/.driver-ready 是否因为网卡驱动容器崩溃而从未产生.
+
+usage() {
+    cat >&2 <<EOF
+Usage: $0 COMMAND [ARG...]
+
+Commands:
+  init   [-a | --accept-license]
+  update [-k | --kernel VERSION] [-s | --sign KEYID] [-t | --tag TAG]
+EOF
+    exit 1
+}
+
+# --- 1. 参数存在性检查 ---
+# 如果没有任何参数($# 等于 0), 说明用户直接运行了脚本而没指定操作.
+if [ $# -eq 0 ]; then
+    # 打印帮助信息并退出
+    usage
+fi
+# --- 2. 提取子命令 ---
+# command 变量获取第一个参数(如 "init", "update").
+# shift 操作将参数左移, 即原先的 $2 变成 $1, 方便后续 getopt 解析剩余的选项.
+command=$1
+shift
+
+# --- 3. 针对不同子命令的参数预解析 (getopt) ---
+# 为什么要这么写: 不同的操作需要不同的开关. 这里使用 getopt 规范化长短参数.
+case "${command}" in
+# init 命令: 支持 --accept-license 或 -a
+init) options=$(getopt -l accept-license -o a -- "$@") ;;
+# update 命令: 支持内核版本、签名密钥、标签三个带参数的选项
+update) options=$(getopt -l kernel:,sign:,tag: -o k:s:t: -- "$@") ;;
+# 以下命令不需要额外选项
+reload_nvidia_peermem) options="" ;;
+probe_nvidia_peermem) options="" ;;
+# 未知命令直接报错
+*) usage ;;
+esac
+
+# 如果 getopt 解析失败(用户输入了不支持的 flag), 立即退出
+if [ $? -ne 0 ]; then
+    usage
+fi
+
+# --- 4. 规范化参数重置 ---
+# 为什么要这么写: getopt 会将参数重新排列(如把 -a 放到前面).
+# eval set -- "${options}" 会将格式化后的 options 重新赋值给脚本的当前位置参数 ($1, $2...).
+eval set -- "${options}"
+
+# --- 5. 初始化默认值 ---
+# 设计意图: 保证在没有传入对应参数时, 脚本有合理的行为.
+ACCEPT_LICENSE=""
+# 核心点: 默认内核版本取自当前运行系统的 uname -r
+KERNEL_VERSION=$(uname -r)
+PRIVATE_KEY=""
+PACKAGE_TAG=""
+
+# --- 6. 选项循环赋值 ---
+# 为什么要这么写: 这是一个标准的参数处理循环, 将 flag 转化为脚本内的变量.
+for opt in ${options}; do
+    case "$opt" in
+    -a | --accept-license)
+        ACCEPT_LICENSE="yes"
+        shift 1
+        ;;
+    -k | --kernel)
+        # 获取 flag 后面的具体值
+        KERNEL_VERSION=$2
+        # 跳过 flag 和它的值
+        shift 2
+        ;;
+    -s | --sign)
+        PRIVATE_KEY=$2
+        shift 2
+        ;;
+    -t | --tag)
+        PACKAGE_TAG=$2
+        shift 2
+        ;;
+    --)
+        # 遇到 -- 停止解析, 这是 getopt 的标准分隔符
+        shift
+        break
+        ;;
+    esac
+done
+
+# 如果在解析完所有预定义选项后, 还剩有位置参数, 说明输入非法.
+if [ $# -ne 0 ]; then
+    usage
+fi
+
+# --- 7. 命令派发 (Execution) ---
+# 为什么要这么写: 这是 Shell 脚本实现多态的一种非常简洁的方式.
+# 这里的 $command 会直接调用脚本中定义的同名函数(如 function init() { ... }).
+$command
+
+# 研究员视角的深度解析: 为什么要这么写?
+# 作为一名研究人员, 你会发现这段代码体现了 "工业级命令行工具" 的几个关键设计准则:
+# 1. 采用"子命令"架构 (Sub-command Pattern)
+# 设计原因: 模仿 docker 或 kubectl 的操作模式. nvidia-driver init 负责初次安装, nvidia-driver update 负责增量更新.
+# 好处: 这种设计使得脚本功能高度模块化. 通过最后的 $command 直接调用同名函数, 代码结构非常清晰, 避免了写几十个嵌套的 if-else.
+# 2. 使用 getopt 而非手动解析
+# 设计原因: 手动解析变量(如使用 $1, $2 判断)非常脆弱, 无法处理 -ak 5.15 这种组合参数, 也无法处理长短参数混用.
+# 好处: getopt 是 Linux 系统的标准工具, 它能自动处理 --accept-license 这种长参数, 并能正确处理 -- 之后的参数, 极大地提升了脚本在不同发行版上的健壮性.
+# 3. 默认值的"环境感知" (uname -r)
+# 设计原因: 在 Kubernetes 中, 驱动容器是以 DaemonSet 运行在宿主机上的.
+# 为什么要这么写: 默认设置为 uname -r 极其重要. 这意味着在大多数 K8s 集群中, 你不需要在 YAML 里手动写死内核版本. 容器启动时会自动嗅探宿主机的内核, 然后去寻找或编译对应的驱动模块. 这是实现 "零配置部署" 的关键.
+# 4. 显式许可证接受 (ACCEPT_LICENSE)
+# 合规性考量: NVIDIA 的驱动受 EULA 协议保护.
+# 为什么要这么写: 通过 -a 参数强制用户显式同意. 这不仅是法律合规的要求, 也防止了驱动在未授权的情况下被误部署.
+# 5. eval set -- "${options}" 的"黑魔法"
+# 技术深度: getopt 生成的是一个加过引号的字符串. 如果直接赋值给变量, Shell 会在遇到空格时发生错误切分.
+# 为什么要这么写: eval 会让 Shell 重新解析一遍该行, 确保带引号的复杂参数(比如带空格的路径)能被正确地"封存"在 $1, $2 里的独立位置, 这是编写生产级 Shell 脚本的必备技巧.
+# 总结
+# 这段代码虽然只是驱动容器脚本的"前台接待员", 但它确保了从 Kubernetes 调度层传来的指令能够被准确、安全、规范地解析.
+# 研究员建议:
+# 如果你在 K8s 中修改了驱动容器的 args, 请务必参考这个 case 逻辑. 例如, 如果你想给驱动加上特殊的自定义标签, 你应该在 args 中加入 -t my-special-node, 而脚本逻辑会自动将其捕获并传递给后续的 mkprecompiled 工具.
