@@ -1,7 +1,7 @@
 #! /bin/bash
 # Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
 
-set -eu
+set -xeu
 
 KERNEL_VERSION=$(uname -r)
 OPEN_KERNEL_MODULES_ENABLED="${OPEN_KERNEL_MODULES_ENABLED:-false}"
@@ -34,7 +34,7 @@ _assert_nvswitch_system() {
 _mellanox_devices_present() {
     devices_found=0
     for dev in /sys/bus/pci/devices/*; do
-        read vendor < $dev/vendor
+        read vendor <$dev/vendor
         if [ "$vendor" = "0x15b3" ]; then
             echo "Mellanox device found at $(basename $dev)"
             return 0
@@ -47,7 +47,7 @@ _mellanox_devices_present() {
 _gpu_direct_rdma_enabled() {
     if [ "${GPU_DIRECT_RDMA_ENABLED}" = "true" ]; then
         # check if mellanox cards are present
-        if  _mellanox_devices_present; then
+        if _mellanox_devices_present; then
             return 0
         fi
     fi
@@ -68,31 +68,31 @@ _get_module_params() {
     local base_path="/drivers"
     # nvidia
     if [ -f "${base_path}/nvidia.conf" ]; then
-       while IFS="" read -r param || [ -n "$param" ]; do
-           NVIDIA_MODULE_PARAMS+=("$param")
-       done <"${base_path}/nvidia.conf"
-       echo "Module parameters provided for nvidia: ${NVIDIA_MODULE_PARAMS[@]}"
+        while IFS="" read -r param || [ -n "$param" ]; do
+            NVIDIA_MODULE_PARAMS+=("$param")
+        done <"${base_path}/nvidia.conf"
+        echo "Module parameters provided for nvidia: ${NVIDIA_MODULE_PARAMS[@]}"
     fi
     # nvidia-uvm
     if [ -f "${base_path}/nvidia-uvm.conf" ]; then
-       while IFS="" read -r param || [ -n "$param" ]; do
-           NVIDIA_UVM_MODULE_PARAMS+=("$param")
-       done <"${base_path}/nvidia-uvm.conf"
-       echo "Module parameters provided for nvidia-uvm: ${NVIDIA_UVM_MODULE_PARAMS[@]}"
+        while IFS="" read -r param || [ -n "$param" ]; do
+            NVIDIA_UVM_MODULE_PARAMS+=("$param")
+        done <"${base_path}/nvidia-uvm.conf"
+        echo "Module parameters provided for nvidia-uvm: ${NVIDIA_UVM_MODULE_PARAMS[@]}"
     fi
     # nvidia-modeset
     if [ -f "${base_path}/nvidia-modeset.conf" ]; then
-       while IFS="" read -r param || [ -n "$param" ]; do
-           NVIDIA_MODESET_MODULE_PARAMS+=("$param")
-       done <"${base_path}/nvidia-modeset.conf"
-       echo "Module parameters provided for nvidia-modeset: ${NVIDIA_MODESET_MODULE_PARAMS[@]}"
+        while IFS="" read -r param || [ -n "$param" ]; do
+            NVIDIA_MODESET_MODULE_PARAMS+=("$param")
+        done <"${base_path}/nvidia-modeset.conf"
+        echo "Module parameters provided for nvidia-modeset: ${NVIDIA_MODESET_MODULE_PARAMS[@]}"
     fi
     # nvidia-peermem
     if [ -f "${base_path}/nvidia-peermem.conf" ]; then
-       while IFS="" read -r param || [ -n "$param" ]; do
-           NVIDIA_PEERMEM_MODULE_PARAMS+=("$param")
-       done <"${base_path}/nvidia-peermem.conf"
-       echo "Module parameters provided for nvidia-peermem: ${NVIDIA_PEERMEM_MODULE_PARAMS[@]}"
+        while IFS="" read -r param || [ -n "$param" ]; do
+            NVIDIA_PEERMEM_MODULE_PARAMS+=("$param")
+        done <"${base_path}/nvidia-peermem.conf"
+        echo "Module parameters provided for nvidia-peermem: ${NVIDIA_PEERMEM_MODULE_PARAMS[@]}"
     fi
 }
 
@@ -106,7 +106,7 @@ _load_driver() {
     local fw_path_config_file="/sys/module/firmware_class/parameters/path"
     for param in "${NVIDIA_MODULE_PARAMS[@]}"; do
         if [[ "$param" == "NVreg_EnableGpuFirmware=0" ]]; then
-          set_fw_path="false"
+            set_fw_path="false"
         fi
     done
 
@@ -116,7 +116,7 @@ _load_driver() {
             echo "WARNING: A search path is already configured in $fw_path_config_file"
             echo "         Retaining the current configuration"
         else
-            echo -n "$nv_fw_search_path" > $fw_path_config_file || echo "WARNING: Failed to configure firmware search path"
+            echo -n "$nv_fw_search_path" >$fw_path_config_file || echo "WARNING: Failed to configure firmware search path"
         fi
     fi
 
@@ -129,7 +129,6 @@ _load_driver() {
     modprobe nvidia-uvm "${NVIDIA_UVM_MODULE_PARAMS[@]}"
     modprobe nvidia-modeset "${NVIDIA_MODESET_MODULE_PARAMS[@]}"
     set +o xtrace -o nounset
-
 
     if _gpu_direct_rdma_enabled; then
         echo "Loading NVIDIA Peer Memory kernel module..."
@@ -147,7 +146,7 @@ _load_driver() {
         apt-get install -y --no-install-recommends \
             nvidia-fabricmanager-${DRIVER_BRANCH}=${DRIVER_VERSION}-1 \
             libnvidia-nscq-${DRIVER_BRANCH}=${DRIVER_VERSION}-1
- 
+
         echo "Starting NVIDIA fabric manager daemon..."
         nv-fabricmanager -c /usr/share/nvidia/nvswitch/fabricmanager.cfg
     fi
@@ -166,11 +165,11 @@ _unload_driver() {
 
     echo "Stopping NVIDIA persistence daemon..."
     if [ -f /var/run/nvidia-persistenced/nvidia-persistenced.pid ]; then
-        local pid=$(< /var/run/nvidia-persistenced/nvidia-persistenced.pid)
+        local pid=$(</var/run/nvidia-persistenced/nvidia-persistenced.pid)
 
         kill -SIGTERM "${pid}"
         for i in $(seq 1 50); do
-            kill -0 "${pid}" 2> /dev/null || break
+            kill -0 "${pid}" 2>/dev/null || break
             sleep 0.1
         done
         if [ $i -eq 50 ]; then
@@ -181,11 +180,11 @@ _unload_driver() {
 
     if [ -f /var/run/nvidia-fabricmanager/nv-fabricmanager.pid ]; then
         echo "Stopping NVIDIA fabric manager daemon..."
-        local pid=$(< /var/run/nvidia-fabricmanager/nv-fabricmanager.pid)
+        local pid=$(</var/run/nvidia-fabricmanager/nv-fabricmanager.pid)
 
         kill -SIGTERM "${pid}"
         for i in $(seq 1 50); do
-            kill -0 "${pid}" 2> /dev/null || break
+            kill -0 "${pid}" 2>/dev/null || break
             sleep 0.1
         done
         if [ $i -eq 50 ]; then
@@ -196,27 +195,27 @@ _unload_driver() {
 
     echo "Unloading NVIDIA driver kernel modules..."
     if [ -f /sys/module/nvidia_drm/refcnt ]; then
-        nvidia_drm_refs=$(< /sys/module/nvidia_drm/refcnt)
+        nvidia_drm_refs=$(</sys/module/nvidia_drm/refcnt)
         rmmod_args+=("nvidia-drm")
         ((++nvidia_deps))
     fi
     if [ -f /sys/module/nvidia_modeset/refcnt ]; then
-        nvidia_modeset_refs=$(< /sys/module/nvidia_modeset/refcnt)
+        nvidia_modeset_refs=$(</sys/module/nvidia_modeset/refcnt)
         rmmod_args+=("nvidia-modeset")
         ((++nvidia_deps))
     fi
     if [ -f /sys/module/nvidia_uvm/refcnt ]; then
-        nvidia_uvm_refs=$(< /sys/module/nvidia_uvm/refcnt)
+        nvidia_uvm_refs=$(</sys/module/nvidia_uvm/refcnt)
         rmmod_args+=("nvidia-uvm")
         ((++nvidia_deps))
     fi
     if [ -f /sys/module/nvidia_peermem/refcnt ]; then
-        nvidia_peermem_refs=$(< /sys/module/nvidia_peermem/refcnt)
+        nvidia_peermem_refs=$(</sys/module/nvidia_peermem/refcnt)
         rmmod_args+=("nvidia-peermem")
         ((++nvidia_deps))
     fi
     if [ -f /sys/module/nvidia/refcnt ]; then
-        nvidia_refs=$(< /sys/module/nvidia/refcnt)
+        nvidia_refs=$(</sys/module/nvidia/refcnt)
         rmmod_args+=("nvidia")
     fi
     if [ ${nvidia_refs} -gt ${nvidia_deps} ]; then
@@ -271,7 +270,7 @@ _mount_rootfs() {
 # Unmount the driver rootfs from the run directory.
 _unmount_rootfs() {
     echo "Unmounting NVIDIA driver rootfs..."
-    if findmnt -r -o TARGET | grep "${RUN_DIR}/driver" > /dev/null; then
+    if findmnt -r -o TARGET | grep "${RUN_DIR}/driver" >/dev/null; then
         umount -l -R ${RUN_DIR}/driver
     fi
 }
@@ -280,7 +279,7 @@ init() {
     echo -e "\n========== NVIDIA Software Installer ==========\n"
     echo -e "Starting installation of NVIDIA driver branch ${DRIVER_BRANCH} for Linux kernel version ${KERNEL_VERSION}\n"
 
-    exec 3> ${PID_FILE}
+    exec 3>${PID_FILE}
     if ! flock -n 3; then
         echo "An instance of the NVIDIA driver is already running, aborting"
         exit 1
@@ -317,15 +316,13 @@ _shutdown() {
 # Wait for MOFED drivers to be loaded and load nvidia-peermem whenever it gets unloaded during MOFED driver updates
 reload_nvidia_peermem() {
     if [ "$USE_HOST_MOFED" = "true" ]; then
-        until  lsmod | grep mlx5_core > /dev/null 2>&1 && [ -f /sys/module/nvidia/refcnt ];
-        do
+        until lsmod | grep mlx5_core >/dev/null 2>&1 && [ -f /sys/module/nvidia/refcnt ]; do
             echo "waiting for mellanox ofed and nvidia drivers to be installed"
             sleep 10
         done
     else
         # use driver readiness flag created by MOFED container
-        until  [ -f /run/mellanox/drivers/.driver-ready ] && [ -f /sys/module/nvidia/refcnt ];
-        do
+        until [ -f /run/mellanox/drivers/.driver-ready ] && [ -f /sys/module/nvidia/refcnt ]; do
             echo "waiting for mellanox ofed and nvidia drivers to be installed"
             sleep 10
         done
@@ -345,7 +342,7 @@ reload_nvidia_peermem() {
 
 # probe by gpu-opertor for liveness/startup checks for nvidia-peermem module to be loaded when MOFED drivers are ready
 probe_nvidia_peermem() {
-    if lsmod | grep mlx5_core > /dev/null 2>&1; then
+    if lsmod | grep mlx5_core >/dev/null 2>&1; then
         if [ ! -f /sys/module/nvidia_peermem/refcnt ]; then
             echo "nvidia-peermem module is not loaded"
             return 1
@@ -370,12 +367,13 @@ EOF
 if [ $# -eq 0 ]; then
     usage
 fi
-command=$1; shift
+command=$1
+shift
 case "${command}" in
-    init) options=$(getopt -l accept-license -o a -- "$@") ;;
-    reload_nvidia_peermem) options="" ;;
-    probe_nvidia_peermem) options="" ;;
-    *) usage ;;
+init) options=$(getopt -l accept-license -o a -- "$@") ;;
+reload_nvidia_peermem) options="" ;;
+probe_nvidia_peermem) options="" ;;
+*) usage ;;
 esac
 if [ $? -ne 0 ]; then
     usage

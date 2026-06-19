@@ -1,38 +1,47 @@
-FROM nvcr.io/nvidia/cuda:12.6.3-base-ubuntu22.04 as build
+ARG CUDA_VERSION
+
+FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-base-ubuntu22.04 as build
 
 ARG TARGETARCH
 ARG GOLANG_VERSION
 
 SHELL ["/bin/bash", "-c"]
 
-RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
+RUN set -eux && echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
 
 # Remove cuda repository to avoid GPG errors
-RUN rm -f /etc/apt/sources.list.d/cuda*
+RUN set -eux && rm -f /etc/apt/sources.list.d/cuda*
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        apt-utils \
-        build-essential \
-        ca-certificates \
-        curl \
-        git && \
+RUN set -eux && apt-get update && apt-get install -y --no-install-recommends \
+    apt-utils \
+    build-essential \
+    ca-certificates \
+    curl \
+    wget \
+    git && \
     rm -rf /var/lib/apt/lists/*
 
 # download appropriate binary based on the target architecture for multi-arch builds
-RUN OS_ARCH=${TARGETARCH/x86_64/amd64} && OS_ARCH=${OS_ARCH/aarch64/arm64} && \
-    curl https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-${OS_ARCH}.tar.gz \
-    | tar -C /usr/local -xz
+# RUN set -eux && OS_ARCH=${TARGETARCH/x86_64/amd64} && OS_ARCH=${OS_ARCH/aarch64/arm64} && \
+#     curl https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-${OS_ARCH}.tar.gz \
+#     | tar -C /usr/local -xz
+
+RUN set -eux; \
+    dpkgArch="$(dpkg --print-architecture | awk -F- '{ print $NF }')"; \
+    wget -O go.tar.gz "https://go.dev/dl/go${GOLANG_VERSION}.linux-${dpkgArch}.tar.gz"; \
+    tar -C /usr/local -xzvf go.tar.gz; \
+    rm -rf go.tar.gz
 
 ENV PATH /usr/local/go/bin:$PATH
 
 WORKDIR /work
 
-RUN git clone https://github.com/NVIDIA/gpu-driver-container driver && \
+RUN set -eux && git clone https://github.com/NVIDIA/gpu-driver-container driver && \
     cd driver/vgpu/src && \
     go build -o vgpu-util && \
     mv vgpu-util /work
 
-FROM nvcr.io/nvidia/cuda:12.6.3-base-ubuntu22.04
+FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-base-ubuntu22.04
 
 SHELL ["/bin/bash", "-c"]
 
@@ -55,17 +64,24 @@ ARG DISABLE_VGPU_VERSION_CHECK=true
 ENV DISABLE_VGPU_VERSION_CHECK=$DISABLE_VGPU_VERSION_CHECK
 ENV NVIDIA_VISIBLE_DEVICES=void
 
-RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
+RUN set -eux && echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
 
-RUN echo "TARGETARCH=$TARGETARCH"
+RUN set -eux && echo "TARGETARCH=$TARGETARCH"
 
 ADD install.sh /tmp
 
 # Fetch GPG keys for CUDA repo
-RUN apt-key del 7fa2af80 && OS_ARCH=${TARGETARCH/amd64/x86_64} && OS_ARCH=${OS_ARCH/arm64/sbsa} && \
+RUN set -eux && apt-key del 7fa2af80 && OS_ARCH=${TARGETARCH/amd64/x86_64} && OS_ARCH=${OS_ARCH/arm64/sbsa} && \
     apt-key adv --fetch-keys "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/${OS_ARCH}/3bf863cc.pub"
 
-RUN /tmp/install.sh reposetup && /tmp/install.sh depinstall && \
+# RUN set -eux && apt-get update && apt-get install -y --no-install-recommends \
+#     gnupg2 curl ca-certificates && \
+#     curl -fsSLO https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/${NVARCH}/cuda-keyring_1.0-1_all.deb && \
+#     dpkg -i cuda-keyring_1.0-1_all.deb && \
+#     apt-get purge --autoremove -y curl \
+#     && rm -rf /var/lib/apt/lists/*
+
+RUN set -eux && /tmp/install.sh reposetup && /tmp/install.sh depinstall && \
     curl -fsSL -o /usr/local/bin/donkey https://github.com/3XX0/donkey/releases/download/v1.1.0/donkey && \
     chmod +x /usr/local/bin/donkey
 
@@ -76,12 +92,12 @@ COPY --from=build /work/vgpu-util /usr/local/bin
 ADD drivers drivers/
 
 # Fetch the installer automatically for passthrough/baremetal types
-RUN if [ "$DRIVER_TYPE" != "vgpu" ]; then \
+RUN set -eux && if [ "$DRIVER_TYPE" != "vgpu" ]; then \
     cd drivers && \
     /tmp/install.sh download_installer; fi
 
 # Fabric manager packages are not available for arm64
-RUN if [ "$DRIVER_TYPE" != "vgpu" ] && [ "$TARGETARCH" != "arm64" ]; then \
+RUN set -eux && if [ "$DRIVER_TYPE" != "vgpu" ] && [ "$TARGETARCH" != "arm64" ]; then \
     apt-get update && \
     apt-get install -y --no-install-recommends nvidia-fabricmanager-${DRIVER_BRANCH}=${DRIVER_VERSION}-1 \
     libnvidia-nscq-${DRIVER_BRANCH}=${DRIVER_VERSION}-1; fi
@@ -92,7 +108,7 @@ ARG PUBLIC_KEY=empty
 COPY ${PUBLIC_KEY} kernel/pubkey.x509
 
 # Install the gcc-12 package in Ubuntu 22.04 as Kernels with versions 5.19.x and 6.5.x need gcc 12.3.0 for compilation
-RUN apt-get update && \
+RUN set -eux && apt-get update && \
     apt-get install -y --no-install-recommends gcc-12 g++-12 && \
     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 12 && \
     update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 12 && \
@@ -101,15 +117,15 @@ RUN apt-get update && \
 
 # Install / upgrade packages here that are required to resolve CVEs
 ARG CVE_UPDATES
-RUN if [ -n "${CVE_UPDATES}" ]; then \
-        apt-get update && apt-get upgrade -y ${CVE_UPDATES} && \
-        rm -rf /var/lib/apt/lists/*; \
+RUN set -eux && if [ -n "${CVE_UPDATES}" ]; then \
+    apt-get update && apt-get upgrade -y ${CVE_UPDATES} && \
+    rm -rf /var/lib/apt/lists/*; \
     fi
 
 # Remove cuda repository to avoid GPG errors
-RUN rm -f /etc/apt/sources.list.d/cuda*
+RUN set -eux && rm -f /etc/apt/sources.list.d/cuda*
 
 # Add NGC DL license from the CUDA image
-RUN mkdir /licenses && mv /NGC-DL-CONTAINER-LICENSE /licenses/NGC-DL-CONTAINER-LICENSE
+RUN set -eux && mkdir /licenses && mv /NGC-DL-CONTAINER-LICENSE /licenses/NGC-DL-CONTAINER-LICENSE
 
 ENTRYPOINT ["nvidia-driver", "init"]

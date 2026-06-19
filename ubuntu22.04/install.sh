@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 
-set -eu
+set -xeu
 
-download_installer () {
-    DRIVER_ARCH=${TARGETARCH/amd64/x86_64} && DRIVER_ARCH=${DRIVER_ARCH/arm64/aarch64} && curl -fSsl -O $BASE_URL/$DRIVER_VERSION/NVIDIA-Linux-$DRIVER_ARCH-$DRIVER_VERSION.run && \
-    chmod +x  NVIDIA-Linux-$DRIVER_ARCH-$DRIVER_VERSION.run;
+download_installer() {
+    DRIVER_ARCH=${TARGETARCH/amd64/x86_64} && DRIVER_ARCH=${DRIVER_ARCH/arm64/aarch64} && curl -fSsl -O $BASE_URL/$DRIVER_VERSION/NVIDIA-Linux-$DRIVER_ARCH-$DRIVER_VERSION.run &&
+        chmod +x NVIDIA-Linux-$DRIVER_ARCH-$DRIVER_VERSION.run
+    # DRIVER_ARCH=x86_64
+    # DRIVER_ARCH=x86_64
+    # curl -fSsl -O https://us.download.nvidia.com/tesla/580.126.20/NVIDIA-Linux-x86_64-580.126.20.run
+    # chmod +x NVIDIA-Linux-x86_64-580.126.20.run
 }
 
-dep_install () {
+dep_install() {
     if [ "$TARGETARCH" = "amd64" ]; then
-        dpkg --add-architecture i386 && \
+        dpkg --add-architecture i386 &&
             apt-get update && apt-get install -y --no-install-recommends \
             apt-utils \
             build-essential \
@@ -19,10 +23,10 @@ dep_install () {
             file \
             libelf-dev \
             libglvnd-dev \
-            pkg-config && \
-        rm -rf /var/lib/apt/lists/*
+            pkg-config &&
+            rm -rf /var/lib/apt/lists/*
     elif [ "$TARGETARCH" = "arm64" ]; then
-        dpkg --add-architecture arm64 && \
+        dpkg --add-architecture arm64 &&
             apt-get update && apt-get install -y \
             build-essential \
             ca-certificates \
@@ -30,22 +34,22 @@ dep_install () {
             kmod \
             file \
             libelf-dev \
-            libglvnd-dev && \
-        rm -rf /var/lib/apt/lists/*
+            libglvnd-dev &&
+            rm -rf /var/lib/apt/lists/*
     fi
 }
 
-repo_setup () {
+repo_setup() {
     if [ "$TARGETARCH" = "amd64" ]; then
-        echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy main universe" > /etc/apt/sources.list && \
-        echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-updates main universe" >> /etc/apt/sources.list && \
-        echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-security main universe" >> /etc/apt/sources.list && \
-        usermod -o -u 0 -g 0 _apt
+        echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy main universe" >/etc/apt/sources.list &&
+            echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-updates main universe" >>/etc/apt/sources.list &&
+            echo "deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-security main universe" >>/etc/apt/sources.list &&
+            usermod -o -u 0 -g 0 _apt
     elif [ "$TARGETARCH" = "arm64" ]; then
-        echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main universe" > /etc/apt/sources.list && \
-        echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main universe" >> /etc/apt/sources.list && \
-        echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main universe" >> /etc/apt/sources.list && \
-        usermod -o -u 0 -g 0 _apt
+        echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main universe" >/etc/apt/sources.list &&
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main universe" >>/etc/apt/sources.list &&
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main universe" >>/etc/apt/sources.list &&
+            usermod -o -u 0 -g 0 _apt
     else
         echo "TARGETARCH doesn't match a known arch target"
         exit 1
@@ -53,13 +57,12 @@ repo_setup () {
 }
 
 if [ "$1" = "reposetup" ]; then
-  repo_setup
+    repo_setup
 elif [ "$1" = "depinstall" ]; then
-  dep_install
+    dep_install
 elif [ "$1" = "download_installer" ]; then
-  download_installer
+    download_installer
 else
-  echo "Unknown function: $1"
-  exit 1
+    echo "Unknown function: $1"
+    exit 1
 fi
-
