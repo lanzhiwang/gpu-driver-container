@@ -123,13 +123,13 @@ Updating the package cache...
 ++ echo 5.15.0-173-generic
 ++ sed 's/[^a-z]*//'
 ++ grep -Ev '^generic|virtual'
-Resolving Linux kernel version...
-Proceeding with Linux kernel version 5.15.0-173-generic
 + local flavor=
 + echo 'Resolving Linux kernel version...'
+Resolving Linux kernel version...
 + '[' -z 5.15.0-173 ']'
 + KERNEL_VERSION=5.15.0-173-generic
 + echo 'Proceeding with Linux kernel version 5.15.0-173-generic'
+Proceeding with Linux kernel version 5.15.0-173-generic
 + return 0
 + _install_prerequisites
 ++ mktemp -d
@@ -139,17 +139,17 @@ Proceeding with Linux kernel version 5.15.0-173-generic
 + rm -rf /lib/modules/5.15.0-173-generic
 + mkdir -p /lib/modules/5.15.0-173-generic/proc
 + echo 'Installing Linux kernel headers...'
-+ apt-get -qq install --no-install-recommends linux-headers-5.15.0-173-generic
 Installing Linux kernel headers...
++ apt-get -qq install --no-install-recommends linux-headers-5.15.0-173-generic
 + echo 'Installing Linux kernel module files...'
-+ apt-get -qq download linux-image-5.15.0-173-generic
 Installing Linux kernel module files...
++ apt-get -qq download linux-image-5.15.0-173-generic
 + dpkg -x linux-image-5.15.0-173-generic_5.15.0-173.183_amd64.deb .
 + mv lib/modules/5.15.0-173-generic/modules.builtin lib/modules/5.15.0-173-generic/modules.builtin.modinfo lib/modules/5.15.0-173-generic/modules.order /lib/modules/5.15.0-173-generic
 + mv lib/modules/5.15.0-173-generic/kernel /lib/modules/5.15.0-173-generic
 + depmod 5.15.0-173-generic
-Generating Linux kernel version string...
 + echo 'Generating Linux kernel version string...'
+Generating Linux kernel version string...
 + sed 's/\/boot\/vmlinuz-//g' -
 + ls -1 boot/vmlinuz-5.15.0-173-generic
 + '[' -z boot/vmlinuz-5.15.0-173-generic ']'
@@ -178,14 +178,14 @@ Skipping BTF generation for /usr/src/nvidia-580.126.20/kernel/nvidia-drm.ko due 
 Skipping BTF generation for /usr/src/nvidia-580.126.20/kernel/nvidia-modeset.ko due to unavailability of vmlinux
 Skipping BTF generation for /usr/src/nvidia-580.126.20/kernel/nvidia-uvm.ko due to unavailability of vmlinux
 Skipping BTF generation for /usr/src/nvidia-580.126.20/kernel/nvidia.ko due to unavailability of vmlinux
-Relinking NVIDIA driver kernel modules...
 + echo 'Relinking NVIDIA driver kernel modules...'
+Relinking NVIDIA driver kernel modules...
 + rm -f nvidia.ko nvidia-modeset.ko
 + ld -d -r -o nvidia.ko ./nv-linux.o ./nvidia/nv-kernel.o_binary
 + ld -d -r -o nvidia-modeset.ko ./nv-modeset-linux.o ./nvidia-modeset/nv-modeset-kernel.o_binary
-Building NVIDIA driver package nvidia-modules-5.15.0-173...
 + '[' -n '' ']'
 + echo 'Building NVIDIA driver package nvidia-modules-5.15.0-173...'
+Building NVIDIA driver package nvidia-modules-5.15.0-173...
 + ../mkprecompiled --pack nvidia-modules-5.15.0-173 --description 5.15.0-173-generic --proc-mount-point /lib/modules/5.15.0-173-generic/proc --driver-version 580.126.20 --kernel-interface nv-linux.o --linked-module-name nvidia.ko --core-object-name nvidia/nv-kernel.o_binary --target-directory . --kernel-interface nv-modeset-linux.o --linked-module-name nvidia-modeset.ko --core-object-name nvidia-modeset/nv-modeset-kernel.o_binary --target-directory . --kernel-module nvidia-uvm.ko --target-directory .
 + mkdir -p precompiled
 + mv nvidia-modules-5.15.0-173 precompiled
@@ -194,10 +194,10 @@ Building NVIDIA driver package nvidia-modules-5.15.0-173...
 + install_args=()
 + local install_args
 + echo 'Installing NVIDIA driver kernel modules...'
+Installing NVIDIA driver kernel modules...
 + cd /usr/src/nvidia-580.126.20
 + '[' -d /lib/modules/5.15.0-173-generic/kernel/drivers/video ']'
 + rm -rf /lib/modules/5.15.0-173-generic/kernel/drivers/video
-Installing NVIDIA driver kernel modules...
 + '[' '' = yes ']'
 + nvidia-installer --kernel-module-only --no-drm --ui=none --no-nouveau-check -m=kernel
 
@@ -265,6 +265,7 @@ Unable to determine whether NVIDIA kernel modules are present in the initramfs. 
 Driver file installation is complete.
 + _load_driver
 + echo 'Parsing kernel module parameters...'
+Parsing kernel module parameters...
 + _get_module_params
 + local base_path=/drivers
 Running post-install sanity check:: Checking
@@ -284,7 +285,7 @@ Installation of the kernel module for the NVIDIA Accelerated Graphics Driver for
 + echo 'Configuring the following firmware search path in '\''/sys/module/firmware_class/parameters/path'\'': /run/nvidia/driver/lib/firmware'
 ++ grep '[^[:space:]]' /sys/module/firmware_class/parameters/path
 
-Parsing kernel module parameters...
+
 Configuring the following firmware search path in '/sys/module/firmware_class/parameters/path': /run/nvidia/driver/lib/firmware
 + [[ ! -z '' ]]
 + echo -n /run/nvidia/driver/lib/firmware

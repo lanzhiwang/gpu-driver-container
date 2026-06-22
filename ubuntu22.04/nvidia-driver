@@ -110,7 +110,7 @@ _install_prerequisites() (
     # trap 'rm -rf /tmp/tmp.Ic9IjrBxuQ' EXIT
 
     cd ${tmp_dir}
-    tree -L 2 $(pwd)
+    tree -L 2 ${tmp_dir}
     # cd /tmp/tmp.Ic9IjrBxuQ
 
     rm -rf /lib/modules/${KERNEL_VERSION}
@@ -130,6 +130,8 @@ _install_prerequisites() (
 
     { apt-get -qq download linux-modules-${KERNEL_VERSION} && dpkg -x linux-modules*.deb . || true; } 2>/dev/null
 
+    tree -L 2 ${tmp_dir}
+    tree -L 3 /lib/modules/${KERNEL_VERSION}
     mv lib/modules/${KERNEL_VERSION}/modules.* /lib/modules/${KERNEL_VERSION}
     # mv lib/modules/5.15.0-173-generic/modules.builtin lib/modules/5.15.0-173-generic/modules.builtin.modinfo lib/modules/5.15.0-173-generic/modules.order /lib/modules/5.15.0-173-generic
 
@@ -152,6 +154,8 @@ _install_prerequisites() (
     mv version /lib/modules/${KERNEL_VERSION}/proc
     # mv version /lib/modules/5.15.0-173-generic/proc
 
+    tree -L 3 /lib/modules/${KERNEL_VERSION}
+
     # rm -rf /tmp/tmp.Ic9IjrBxuQ
 )
 
@@ -169,10 +173,11 @@ _kernel_requires_package() {
     # local proc_mount_arg=
 
     echo "Checking NVIDIA driver packages..."
+    tree -L 3 /usr/src/nvidia-${DRIVER_VERSION}
     cd /usr/src/nvidia-${DRIVER_VERSION}/${KERNEL_TYPE}
     # cd /usr/src/nvidia-580.126.20/kernel
-    tree -L 2 $(pwd)
 
+    tree -L 3 /lib/modules/
     # proc_mount_arg needs to be set, to do the module match check below
     if [ -f /lib/modules/${KERNEL_VERSION}/proc/version ]; then
         proc_mount_arg="--proc-mount-point /lib/modules/${KERNEL_VERSION}/proc"
@@ -209,7 +214,8 @@ _create_driver_package() (
     echo "Compiling NVIDIA driver kernel modules..."
     cd /usr/src/nvidia-${DRIVER_VERSION}/${KERNEL_TYPE}
     # cd /usr/src/nvidia-580.126.20/kernel
-    tree -L 2 $(pwd)
+    pwd
+    tree -L 2 /usr/src/nvidia-${DRIVER_VERSION}
 
     if _gpu_direct_rdma_enabled; then
         ln -s /run/mellanox/drivers/usr/src/ofa_kernel /usr/src/
@@ -327,6 +333,8 @@ _gpu_direct_rdma_enabled() {
 _get_module_params() {
     local base_path="/drivers"
     # local base_path=/drivers
+
+    tree -L 2 ${base_path}
 
     # nvidia
     if [ -f "${base_path}/nvidia.conf" ]; then
@@ -563,8 +571,10 @@ _install_driver() {
     echo "Installing NVIDIA driver kernel modules..."
     cd /usr/src/nvidia-${DRIVER_VERSION}
     # cd /usr/src/nvidia-580.126.20
-    tree -L 2 $(pwd)
+    pwd
+    tree -L 2 /usr/src/nvidia-${DRIVER_VERSION}
 
+    tree -L 2 /lib/modules/${KERNEL_VERSION}
     if [ -d /lib/modules/${KERNEL_VERSION}/kernel/drivers/video ]; then
         rm -rf /lib/modules/${KERNEL_VERSION}/kernel/drivers/video
     else
@@ -577,6 +587,8 @@ _install_driver() {
     fi
     nvidia-installer --kernel-module-only --no-drm --ui=none --no-nouveau-check -m=${KERNEL_TYPE} ${install_args[@]+"${install_args[@]}"}
     # nvidia-installer --kernel-module-only --no-drm --ui=none --no-nouveau-check -m=kernel
+
+    tree -L 2 /lib/modules/${KERNEL_VERSION}
 
 }
 
@@ -691,8 +703,10 @@ init() {
             --x-library-path=/tmp/null \
             --x-sysconfig-path=/tmp/null &&
         mkdir -p /usr/src/nvidia-${DRIVER_VERSION} &&
+        tree -L 3 /usr/src/nvidia-${DRIVER_VERSION} &&
         mv LICENSE mkprecompiled ${KERNEL_TYPE} /usr/src/nvidia-${DRIVER_VERSION} &&
-        sed '9,${/^\(kernel\|LICENSE\)/!d}' .manifest >/usr/src/nvidia-${DRIVER_VERSION}/.manifest
+        sed '9,${/^\(kernel\|LICENSE\)/!d}' .manifest >/usr/src/nvidia-${DRIVER_VERSION}/.manifest &&
+        tree -L 3 /usr/src/nvidia-${DRIVER_VERSION}
     # sh NVIDIA-Linux-x86_64-580.126.20.run -x
     # cd NVIDIA-Linux-x86_64-580.126.20
     # ./nvidia-installer --silent --no-kernel-module --no-nouveau-check --no-nvidia-modprobe --no-rpms --no-backup --no-check-for-alternate-installs --no-libglx-indirect --no-install-libglvnd --x-prefix=/tmp/null --x-module-path=/tmp/null --x-library-path=/tmp/null --x-sysconfig-path=/tmp/null
@@ -721,9 +735,19 @@ init() {
     trap "_shutdown" EXIT
     # trap _shutdown EXIT
 
+    tree -L 3 /var/run
+    # /var/run/nvidia-persistenced
+    # /var/run/nvidia-gridd
+    # /var/run/nvidia-fabricmanager
+    tree -L 3 /sys/module/
+    # /sys/module/nvidia_modeset/
+    # /sys/module/nvidia_uvm/
+    # /sys/module/nvidia_peermem/
+    # /sys/module/nvidia/
     _unload_driver || exit 1
     # _unload_driver
 
+    tree -L 3 ${RUN_DIR}
     _unmount_rootfs
     # _unmount_rootfs
 
