@@ -111,7 +111,7 @@ COPY ${PUBLIC_KEY} kernel/pubkey.x509
 
 # Install the gcc-12 package in Ubuntu 22.04 as Kernels with versions 5.19.x and 6.5.x need gcc 12.3.0 for compilation
 RUN set -eux && apt-get update && \
-    apt-get install -y --no-install-recommends gcc-12 g++-12 && \
+    apt-get install -y --no-install-recommends tree gcc-12 g++-12 && \
     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 12 && \
     update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 12 && \
     rm -rf /var/lib/apt/lists/*

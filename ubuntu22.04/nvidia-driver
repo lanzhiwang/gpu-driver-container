@@ -110,6 +110,7 @@ _install_prerequisites() (
     # trap 'rm -rf /tmp/tmp.Ic9IjrBxuQ' EXIT
 
     cd ${tmp_dir}
+    tree -L 2 $(pwd)
     # cd /tmp/tmp.Ic9IjrBxuQ
 
     rm -rf /lib/modules/${KERNEL_VERSION}
@@ -170,6 +171,7 @@ _kernel_requires_package() {
     echo "Checking NVIDIA driver packages..."
     cd /usr/src/nvidia-${DRIVER_VERSION}/${KERNEL_TYPE}
     # cd /usr/src/nvidia-580.126.20/kernel
+    tree -L 2 $(pwd)
 
     # proc_mount_arg needs to be set, to do the module match check below
     if [ -f /lib/modules/${KERNEL_VERSION}/proc/version ]; then
@@ -207,6 +209,7 @@ _create_driver_package() (
     echo "Compiling NVIDIA driver kernel modules..."
     cd /usr/src/nvidia-${DRIVER_VERSION}/${KERNEL_TYPE}
     # cd /usr/src/nvidia-580.126.20/kernel
+    tree -L 2 $(pwd)
 
     if _gpu_direct_rdma_enabled; then
         ln -s /run/mellanox/drivers/usr/src/ofa_kernel /usr/src/
@@ -560,6 +563,7 @@ _install_driver() {
     echo "Installing NVIDIA driver kernel modules..."
     cd /usr/src/nvidia-${DRIVER_VERSION}
     # cd /usr/src/nvidia-580.126.20
+    tree -L 2 $(pwd)
 
     if [ -d /lib/modules/${KERNEL_VERSION}/kernel/drivers/video ]; then
         rm -rf /lib/modules/${KERNEL_VERSION}/kernel/drivers/video
@@ -663,6 +667,8 @@ _start_vgpu_topology_daemon() {
 }
 
 init() {
+    tree -L 2 $(pwd)
+
     if [ "${DRIVER_TYPE}" = "vgpu" ]; then
         _find_vgpu_driver_version || exit 1
     fi
@@ -670,6 +676,7 @@ init() {
     # Install the userspace components and copy the kernel module sources.
     sh NVIDIA-Linux-$DRIVER_ARCH-$DRIVER_VERSION.run -x &&
         cd NVIDIA-Linux-$DRIVER_ARCH-$DRIVER_VERSION &&
+        tree -L 2 $(pwd) &&
         ./nvidia-installer --silent \
             --no-kernel-module \
             --no-nouveau-check \
@@ -772,6 +779,7 @@ update() {
         if [ ! -e /usr/src/nvidia-${DRIVER_VERSION}/mkprecompiled ]; then
             sh NVIDIA-Linux-$DRIVER_ARCH-$DRIVER_VERSION.run -x &&
                 cd NVIDIA-Linux-$DRIVER_ARCH-$DRIVER_VERSION &&
+                tree -L 2 $(pwd) &&
                 ./nvidia-installer --silent \
                     --no-kernel-module \
                     --no-nouveau-check \
