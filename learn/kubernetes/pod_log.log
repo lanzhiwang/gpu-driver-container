@@ -1,4 +1,3 @@
-root@ubuntu-mass:~# kubectl -n gpu-operator logs nvidia-driver-daemonset-dssw2
 + RUN_DIR=/run/nvidia
 + PID_FILE=/run/nvidia/nvidia-driver.pid
 + DRIVER_VERSION=580.126.20
@@ -41,12 +40,264 @@ DRIVER_ARCH is x86_64
 + break
 + '[' 0 -ne 0 ']'
 + init
+++ pwd
++ tree -L 2 /drivers
+/drivers
+|-- NVIDIA-Linux-x86_64-580.126.20.run
+|-- README.md
+`-- kernel
+    `-- pubkey.x509
+
+1 directory, 3 files
 + '[' passthrough = vgpu ']'
 + sh NVIDIA-Linux-x86_64-580.126.20.run -x
 Creating directory NVIDIA-Linux-x86_64-580.126.20
 Verifying archive integrity... OK
 Uncompressing NVIDIA Accelerated Graphics Driver for Linux-x86_64 580.126.20....................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
 + cd NVIDIA-Linux-x86_64-580.126.20
+++ pwd
++ tree -L 2 /drivers/NVIDIA-Linux-x86_64-580.126.20
+/drivers/NVIDIA-Linux-x86_64-580.126.20
+|-- 10_nvidia.json
+|-- 10_nvidia_wayland.json
+|-- 15_nvidia_gbm.json
+|-- 20_nvidia_xcb.json
+|-- 20_nvidia_xlib.json
+|-- 32
+|   |-- libEGL.so.1.1.0
+|   |-- libEGL_nvidia.so.580.126.20
+|   |-- libGL.so.1.7.0
+|   |-- libGLESv1_CM.so.1.2.0
+|   |-- libGLESv1_CM_nvidia.so.580.126.20
+|   |-- libGLESv2.so.2.1.0
+|   |-- libGLESv2_nvidia.so.580.126.20
+|   |-- libGLX.so.0
+|   |-- libGLX_nvidia.so.580.126.20
+|   |-- libGLdispatch.so.0
+|   |-- libOpenCL.so.1.0.0
+|   |-- libOpenGL.so.0
+|   |-- libcuda.so.580.126.20
+|   |-- libglvnd_install_checker
+|   |-- libnvcuvid.so.580.126.20
+|   |-- libnvidia-allocator.so.580.126.20
+|   |-- libnvidia-egl-gbm.so.1.1.3
+|   |-- libnvidia-egl-wayland.so.1.1.20
+|   |-- libnvidia-egl-xcb.so.1.0.4
+|   |-- libnvidia-egl-xlib.so.1.0.4
+|   |-- libnvidia-eglcore.so.580.126.20
+|   |-- libnvidia-encode.so.580.126.20
+|   |-- libnvidia-fbc.so.580.126.20
+|   |-- libnvidia-glcore.so.580.126.20
+|   |-- libnvidia-glsi.so.580.126.20
+|   |-- libnvidia-glvkspirv.so.580.126.20
+|   |-- libnvidia-gpucomp.so.580.126.20
+|   |-- libnvidia-ml.so.580.126.20
+|   |-- libnvidia-nvvm.so.580.126.20
+|   |-- libnvidia-opencl.so.580.126.20
+|   |-- libnvidia-opticalflow.so.580.126.20
+|   |-- libnvidia-ptxjitcompiler.so.580.126.20
+|   |-- libnvidia-tls.so.580.126.20
+|   `-- libvdpau_nvidia.so.580.126.20
+|-- LICENSE
+|-- NVIDIA_Changelog
+|-- README.txt
+|-- _nvngx.dll
+|-- firmware
+|   |-- gsp_ga10x.bin
+|   `-- gsp_tu10x.bin
+|-- html
+|   |-- acknowledgements.html
+|   |-- addressingcapabilities.html
+|   |-- addtlresources.html
+|   |-- appendices.html
+|   |-- audiosupport.html
+|   |-- commonproblems.html
+|   |-- configlaptop.html
+|   |-- configmultxscreens.html
+|   |-- configtwinview.html
+|   |-- depth30.html
+|   |-- displaydevicenames.html
+|   |-- dma_issues.html
+|   |-- dpi.html
+|   |-- dynamicboost.html
+|   |-- dynamicpowermanagement.html
+|   |-- editxconfig.html
+|   |-- egpu.html
+|   |-- faq.html
+|   |-- flippingubb.html
+|   |-- framelock.html
+|   |-- gbm.html
+|   |-- glxsupport.html
+|   |-- gpunames.html
+|   |-- gsp.html
+|   |-- i2c.html
+|   |-- index.html
+|   |-- installationandconfiguration.html
+|   |-- installdriver.html
+|   |-- installedcomponents.html
+|   |-- introduction.html
+|   |-- kernel_open.html
+|   |-- kms.html
+|   |-- knownissues.html
+|   |-- minimumrequirements.html
+|   |-- newusertips.html
+|   |-- ngx.html
+|   |-- nvidia-debugdump.html
+|   |-- nvidia-ml.html
+|   |-- nvidia-peermem.html
+|   |-- nvidia-persistenced.html
+|   |-- nvidia-smi.html
+|   |-- nvidiasettings.html
+|   |-- nvpresent.html
+|   |-- openglenvvariables.html
+|   |-- optimus.html
+|   |-- powermanagement.html
+|   |-- primerenderoffload.html
+|   |-- procinterface.html
+|   |-- profiles.html
+|   |-- programmingmodes.html
+|   |-- randr14.html
+|   |-- retpoline.html
+|   |-- selectdriver.html
+|   |-- sli.html
+|   |-- supportedchips.html
+|   |-- vdpausupport.html
+|   |-- wayland-issues.html
+|   |-- xcompositeextension.html
+|   |-- xconfigoptions.html
+|   |-- xineramaglx.html
+|   |-- xrandrextension.html
+|   `-- xwayland.html
+|-- kernel
+|   |-- Kbuild
+|   |-- Makefile
+|   |-- common
+|   |-- conftest.sh
+|   |-- count-lines.mk
+|   |-- dkms.conf
+|   |-- header-presence-tests.mk
+|   |-- nvidia
+|   |-- nvidia-drm
+|   |-- nvidia-modeset
+|   |-- nvidia-peermem
+|   `-- nvidia-uvm
+|-- kernel-open
+|   |-- Kbuild
+|   |-- Makefile
+|   |-- common
+|   |-- conftest.sh
+|   |-- count-lines.mk
+|   |-- dkms.conf
+|   |-- header-presence-tests.mk
+|   |-- nvidia
+|   |-- nvidia-drm
+|   |-- nvidia-modeset
+|   |-- nvidia-peermem
+|   `-- nvidia-uvm
+|-- libEGL.so.1.1.0
+|-- libEGL.so.580.126.20
+|-- libEGL_nvidia.so.580.126.20
+|-- libGL.so.1.7.0
+|-- libGLESv1_CM.so.1.2.0
+|-- libGLESv1_CM_nvidia.so.580.126.20
+|-- libGLESv2.so.2.1.0
+|-- libGLESv2_nvidia.so.580.126.20
+|-- libGLX.so.0
+|-- libGLX_nvidia.so.580.126.20
+|-- libGLdispatch.so.0
+|-- libOpenCL.so.1.0.0
+|-- libOpenGL.so.0
+|-- libcuda.so.580.126.20
+|-- libcudadebugger.so.580.126.20
+|-- libglvnd_install_checker
+|   |-- check-libglvnd-install.sh
+|   |-- egl_dummy_vendor.json
+|   |-- glvnd_check
+|   `-- libGLX_installcheck.so.0
+|-- libglxserver_nvidia.so.580.126.20
+|-- libnvcuvid.so.580.126.20
+|-- libnvidia-allocator.so.580.126.20
+|-- libnvidia-api.so.1
+|-- libnvidia-cfg.so.580.126.20
+|-- libnvidia-egl-gbm.so.1.1.3
+|-- libnvidia-egl-wayland.so.1.1.20
+|-- libnvidia-egl-xcb.so.1.0.4
+|-- libnvidia-egl-xlib.so.1.0.4
+|-- libnvidia-eglcore.so.580.126.20
+|-- libnvidia-encode.so.580.126.20
+|-- libnvidia-fbc.so.580.126.20
+|-- libnvidia-glcore.so.580.126.20
+|-- libnvidia-glsi.so.580.126.20
+|-- libnvidia-glvkspirv.so.580.126.20
+|-- libnvidia-gpucomp.so.580.126.20
+|-- libnvidia-gtk2.so.580.126.20
+|-- libnvidia-gtk3.so.580.126.20
+|-- libnvidia-ml.so.580.126.20
+|-- libnvidia-ngx.so.580.126.20
+|-- libnvidia-nvvm.so.580.126.20
+|-- libnvidia-nvvm70.so.4
+|-- libnvidia-opencl.so.580.126.20
+|-- libnvidia-opticalflow.so.580.126.20
+|-- libnvidia-pkcs11-openssl3.so.580.126.20
+|-- libnvidia-pkcs11.so.580.126.20
+|-- libnvidia-present.so.580.126.20
+|-- libnvidia-ptxjitcompiler.so.580.126.20
+|-- libnvidia-rtcore.so.580.126.20
+|-- libnvidia-sandboxutils.so.580.126.20
+|-- libnvidia-tls.so.580.126.20
+|-- libnvidia-vksc-core.so.580.126.20
+|-- libnvidia-wayland-client.so.580.126.20
+|-- libnvoptix.so.580.126.20
+|-- libvdpau_nvidia.so.580.126.20
+|-- makeself-help-script.sh
+|-- makeself.sh
+|-- mkprecompiled
+|-- nvidia-application-profiles-580.126.20-key-documentation
+|-- nvidia-application-profiles-580.126.20-rc
+|-- nvidia-bug-report.sh
+|-- nvidia-cuda-mps-control
+|-- nvidia-cuda-mps-control.1.gz
+|-- nvidia-cuda-mps-server
+|-- nvidia-dbus.conf
+|-- nvidia-debugdump
+|-- nvidia-drm-outputclass.conf
+|-- nvidia-installer
+|-- nvidia-installer.1.gz
+|-- nvidia-modprobe
+|-- nvidia-modprobe.1.gz
+|-- nvidia-ngx-updater
+|-- nvidia-pcc
+|-- nvidia-persistenced
+|-- nvidia-persistenced-init.tar.bz2
+|-- nvidia-persistenced.1.gz
+|-- nvidia-powerd
+|-- nvidia-settings
+|-- nvidia-settings.1.gz
+|-- nvidia-settings.desktop
+|-- nvidia-settings.png
+|-- nvidia-smi
+|-- nvidia-smi.1.gz
+|-- nvidia-xconfig
+|-- nvidia-xconfig.1.gz
+|-- nvidia.icd
+|-- nvidia_drv.so
+|-- nvidia_icd.json
+|-- nvidia_icd_vksc.json
+|-- nvidia_layers.json
+|-- nvngx.dll
+|-- nvngx_dlssg.dll
+|-- nvoptix.bin
+|-- pkg-history.txt
+|-- sandboxutils-filelist.json
+|-- supported-gpus
+|   |-- LICENSE
+|   `-- supported-gpus.json
+`-- systemd
+    |-- nvidia-sleep.sh
+    |-- system
+    `-- system-sleep
+
+23 directories, 215 files
 + ./nvidia-installer --silent --no-kernel-module --no-nouveau-check --no-nvidia-modprobe --no-rpms --no-backup --no-check-for-alternate-installs --no-libglx-indirect --no-install-libglvnd --x-prefix=/tmp/null --x-module-path=/tmp/null --x-library-path=/tmp/null --x-sysconfig-path=/tmp/null
 
 WARNING: Unable to determine the default X library path. The path /tmp/null/lib will be used, but this path was not detected in the ldconfig(8) cache, and no directory exists at this path, so it is likely that libraries installed there will not be found by the loader.
@@ -58,17 +309,3460 @@ WARNING: You specified the '--no-kernel-modules' command line option, nvidia-ins
 WARNING: This NVIDIA driver package includes Vulkan components, but no Vulkan ICD loader was detected on this system. The NVIDIA Vulkan ICD will not function without the loader. Most distributions package the Vulkan loader; try installing the "vulkan-loader", "vulkan-icd-loader", or "libvulkan1" package.
 
 + mkdir -p /usr/src/nvidia-580.126.20
++ tree -L 3 /usr/src/nvidia-580.126.20
+/usr/src/nvidia-580.126.20
+
+0 directories, 0 files
 + mv LICENSE mkprecompiled kernel /usr/src/nvidia-580.126.20
 + sed '9,${/^\(kernel\|LICENSE\)/!d}' .manifest
++ tree -L 3 /usr/src/nvidia-580.126.20
+/usr/src/nvidia-580.126.20
+|-- LICENSE
+|-- kernel
+|   |-- Kbuild
+|   |-- Makefile
+|   |-- common
+|   |   `-- inc
+|   |-- conftest.sh
+|   |-- count-lines.mk
+|   |-- header-presence-tests.mk
+|   |-- nvidia
+|   |   |-- detect-self-hosted.h
+|   |   |-- export_nvswitch.h
+|   |   |-- hal
+|   |   |-- i2c_nvswitch.c
+|   |   |-- internal
+|   |   |-- internal_crypt_lib.h
+|   |   |-- ioctl_common_nvswitch.h
+|   |   |-- ioctl_nvswitch.h
+|   |   |-- library
+|   |   |-- libspdm_aead.c
+|   |   |-- libspdm_aead_aes_gcm.c
+|   |   |-- libspdm_ec.c
+|   |   |-- libspdm_ecc.c
+|   |   |-- libspdm_hkdf.c
+|   |   |-- libspdm_hkdf_sha.c
+|   |   |-- libspdm_hmac_sha.c
+|   |   |-- libspdm_internal_crypt_lib.c
+|   |   |-- libspdm_rand.c
+|   |   |-- libspdm_rsa.c
+|   |   |-- libspdm_rsa_ext.c
+|   |   |-- libspdm_sha.c
+|   |   |-- libspdm_shash.c
+|   |   |-- libspdm_x509.c
+|   |   |-- linux_nvswitch.c
+|   |   |-- linux_nvswitch.h
+|   |   |-- nv-acpi.c
+|   |   |-- nv-backlight.c
+|   |   |-- nv-bpmp.c
+|   |   |-- nv-caps-imex.c
+|   |   |-- nv-caps-imex.h
+|   |   |-- nv-caps.c
+|   |   |-- nv-clk.c
+|   |   |-- nv-cray.c
+|   |   |-- nv-dma.c
+|   |   |-- nv-dmabuf.c
+|   |   |-- nv-dsi-parse-panel-props.c
+|   |   |-- nv-gpio.c
+|   |   |-- nv-host1x.c
+|   |   |-- nv-i2c.c
+|   |   |-- nv-imp.c
+|   |   |-- nv-ipc-soc.c
+|   |   |-- nv-kernel.o_binary
+|   |   |-- nv-kthread-q.c
+|   |   |-- nv-memdbg.c
+|   |   |-- nv-mmap.c
+|   |   |-- nv-modeset-interface.c
+|   |   |-- nv-msi.c
+|   |   |-- nv-nano-timer.c
+|   |   |-- nv-p2p.c
+|   |   |-- nv-p2p.h
+|   |   |-- nv-pat.c
+|   |   |-- nv-pat.h
+|   |   |-- nv-pci-table.c
+|   |   |-- nv-pci-table.h
+|   |   |-- nv-pci.c
+|   |   |-- nv-platform-pm.c
+|   |   |-- nv-platform.c
+|   |   |-- nv-procfs.c
+|   |   |-- nv-reg.h
+|   |   |-- nv-report-err.c
+|   |   |-- nv-report-err.h
+|   |   |-- nv-rsync.c
+|   |   |-- nv-rsync.h
+|   |   |-- nv-tracepoint.h
+|   |   |-- nv-usermap.c
+|   |   |-- nv-vm.c
+|   |   |-- nv-vtophys.c
+|   |   |-- nv.c
+|   |   |-- nv_gpu_ops.h
+|   |   |-- nv_uvm_interface.c
+|   |   |-- nvidia-sources.Kbuild
+|   |   |-- nvidia.Kbuild
+|   |   |-- nvlink_caps.c
+|   |   |-- nvlink_caps.h
+|   |   |-- nvlink_common.h
+|   |   |-- nvlink_errors.h
+|   |   |-- nvlink_export.h
+|   |   |-- nvlink_linux.c
+|   |   |-- nvlink_linux.h
+|   |   |-- nvlink_os.h
+|   |   |-- nvlink_pci.h
+|   |   |-- nvlink_proto.h
+|   |   |-- nvspdm_cryptlib_extensions.h
+|   |   |-- nvswitch_event.h
+|   |   |-- os-interface.c
+|   |   |-- os-mlock.c
+|   |   |-- os-pci.c
+|   |   |-- os-registry.c
+|   |   |-- os-usermap.c
+|   |   |-- procfs_nvswitch.c
+|   |   `-- rmp2pdefines.h
+|   |-- nvidia-drm
+|   |   |-- nv-kthread-q.c
+|   |   |-- nv-pci-table.c
+|   |   |-- nv-pci-table.h
+|   |   |-- nv_common_utils.h
+|   |   |-- nvidia-dma-resv-helper.h
+|   |   |-- nvidia-drm-conftest.h
+|   |   |-- nvidia-drm-connector.c
+|   |   |-- nvidia-drm-connector.h
+|   |   |-- nvidia-drm-crtc.c
+|   |   |-- nvidia-drm-crtc.h
+|   |   |-- nvidia-drm-drv.c
+|   |   |-- nvidia-drm-drv.h
+|   |   |-- nvidia-drm-encoder.c
+|   |   |-- nvidia-drm-encoder.h
+|   |   |-- nvidia-drm-fb.c
+|   |   |-- nvidia-drm-fb.h
+|   |   |-- nvidia-drm-fence.c
+|   |   |-- nvidia-drm-fence.h
+|   |   |-- nvidia-drm-format.c
+|   |   |-- nvidia-drm-format.h
+|   |   |-- nvidia-drm-gem-dma-buf.c
+|   |   |-- nvidia-drm-gem-dma-buf.h
+|   |   |-- nvidia-drm-gem-nvkms-memory.c
+|   |   |-- nvidia-drm-gem-nvkms-memory.h
+|   |   |-- nvidia-drm-gem-user-memory.c
+|   |   |-- nvidia-drm-gem-user-memory.h
+|   |   |-- nvidia-drm-gem.c
+|   |   |-- nvidia-drm-gem.h
+|   |   |-- nvidia-drm-helper.c
+|   |   |-- nvidia-drm-helper.h
+|   |   |-- nvidia-drm-ioctl.h
+|   |   |-- nvidia-drm-linux.c
+|   |   |-- nvidia-drm-modeset.c
+|   |   |-- nvidia-drm-modeset.h
+|   |   |-- nvidia-drm-os-interface.c
+|   |   |-- nvidia-drm-os-interface.h
+|   |   |-- nvidia-drm-priv.h
+|   |   |-- nvidia-drm-sources.mk
+|   |   |-- nvidia-drm-utils.c
+|   |   |-- nvidia-drm-utils.h
+|   |   |-- nvidia-drm.Kbuild
+|   |   |-- nvidia-drm.c
+|   |   `-- nvidia-drm.h
+|   |-- nvidia-modeset
+|   |   |-- nv-kthread-q.c
+|   |   |-- nv-modeset-kernel.o_binary
+|   |   |-- nvidia-modeset-linux.c
+|   |   |-- nvidia-modeset-os-interface.h
+|   |   |-- nvidia-modeset.Kbuild
+|   |   |-- nvkms-ioctl.h
+|   |   `-- nvkms.h
+|   |-- nvidia-peermem
+|   |   |-- nv-p2p.h
+|   |   |-- nvidia-peermem.Kbuild
+|   |   |-- nvidia-peermem.c
+|   |   `-- peer_mem.h
+|   `-- nvidia-uvm
+|       |-- cla06fsubch.h
+|       |-- cla16f.h
+|       |-- clb069.h
+|       |-- clb06f.h
+|       |-- clb0b5.h
+|       |-- clc06f.h
+|       |-- clc076.h
+|       |-- clc0b5.h
+|       |-- clc1b5.h
+|       |-- clc365.h
+|       |-- clc369.h
+|       |-- clc36f.h
+|       |-- clc3b5.h
+|       |-- clc46f.h
+|       |-- clc56f.h
+|       |-- clc5b5.h
+|       |-- clc6b5.h
+|       |-- clc7b5.h
+|       |-- clc86f.h
+|       |-- clc8b5.h
+|       |-- clc96f.h
+|       |-- clc9b5.h
+|       |-- clca6f.h
+|       |-- clcab5.h
+|       |-- clcba2.h
+|       |-- ctrl2080mc.h
+|       |-- hwref
+|       |-- nv-kthread-q-selftest.c
+|       |-- nv-kthread-q.c
+|       |-- nvCpuUuid.c
+|       |-- nvidia-uvm-sources.Kbuild
+|       |-- nvidia-uvm.Kbuild
+|       |-- nvstatus.c
+|       |-- uvm.c
+|       |-- uvm.h
+|       |-- uvm_ada.c
+|       |-- uvm_ada_fault_buffer.h
+|       |-- uvm_ampere.c
+|       |-- uvm_ampere_ce.c
+|       |-- uvm_ampere_fault_buffer.c
+|       |-- uvm_ampere_fault_buffer.h
+|       |-- uvm_ampere_host.c
+|       |-- uvm_ampere_mmu.c
+|       |-- uvm_api.h
+|       |-- uvm_ats.c
+|       |-- uvm_ats.h
+|       |-- uvm_ats_faults.c
+|       |-- uvm_ats_faults.h
+|       |-- uvm_ats_sva.c
+|       |-- uvm_ats_sva.h
+|       |-- uvm_blackwell.c
+|       |-- uvm_blackwell_fault_buffer.c
+|       |-- uvm_blackwell_fault_buffer.h
+|       |-- uvm_blackwell_host.c
+|       |-- uvm_blackwell_mmu.c
+|       |-- uvm_ce_test.c
+|       |-- uvm_channel.c
+|       |-- uvm_channel.h
+|       |-- uvm_channel_test.c
+|       |-- uvm_common.c
+|       |-- uvm_common.h
+|       |-- uvm_conf_computing.c
+|       |-- uvm_conf_computing.h
+|       |-- uvm_extern_decl.h
+|       |-- uvm_fault_buffer_flush_test.c
+|       |-- uvm_fd_type.c
+|       |-- uvm_fd_type.h
+|       |-- uvm_forward_decl.h
+|       |-- uvm_get_rm_ptes_test.c
+|       |-- uvm_global.c
+|       |-- uvm_global.h
+|       |-- uvm_gpu.c
+|       |-- uvm_gpu.h
+|       |-- uvm_gpu_access_counters.c
+|       |-- uvm_gpu_access_counters.h
+|       |-- uvm_gpu_isr.c
+|       |-- uvm_gpu_isr.h
+|       |-- uvm_gpu_non_replayable_faults.c
+|       |-- uvm_gpu_non_replayable_faults.h
+|       |-- uvm_gpu_replayable_faults.c
+|       |-- uvm_gpu_replayable_faults.h
+|       |-- uvm_gpu_semaphore.c
+|       |-- uvm_gpu_semaphore.h
+|       |-- uvm_gpu_semaphore_test.c
+|       |-- uvm_hal.c
+|       |-- uvm_hal.h
+|       |-- uvm_hal_types.h
+|       |-- uvm_hmm.c
+|       |-- uvm_hmm.h
+|       |-- uvm_hopper.c
+|       |-- uvm_hopper_ce.c
+|       |-- uvm_hopper_fault_buffer.c
+|       |-- uvm_hopper_fault_buffer.h
+|       |-- uvm_hopper_host.c
+|       |-- uvm_hopper_mmu.c
+|       |-- uvm_hopper_sec2.c
+|       |-- uvm_host_test.c
+|       |-- uvm_ioctl.h
+|       |-- uvm_kvmalloc.c
+|       |-- uvm_kvmalloc.h
+|       |-- uvm_kvmalloc_test.c
+|       |-- uvm_linux.c
+|       |-- uvm_linux.h
+|       |-- uvm_linux_ioctl.h
+|       |-- uvm_lock.c
+|       |-- uvm_lock.h
+|       |-- uvm_lock_test.c
+|       |-- uvm_map_external.c
+|       |-- uvm_map_external.h
+|       |-- uvm_maxwell.c
+|       |-- uvm_maxwell_access_counter_buffer.c
+|       |-- uvm_maxwell_ce.c
+|       |-- uvm_maxwell_fault_buffer.c
+|       |-- uvm_maxwell_host.c
+|       |-- uvm_maxwell_mmu.c
+|       |-- uvm_maxwell_sec2.c
+|       |-- uvm_mem.c
+|       |-- uvm_mem.h
+|       |-- uvm_mem_test.c
+|       |-- uvm_migrate.c
+|       |-- uvm_migrate.h
+|       |-- uvm_migrate_pageable.c
+|       |-- uvm_migrate_pageable.h
+|       |-- uvm_mmu.c
+|       |-- uvm_mmu.h
+|       |-- uvm_page_tree_test.c
+|       |-- uvm_pascal.c
+|       |-- uvm_pascal_ce.c
+|       |-- uvm_pascal_fault_buffer.c
+|       |-- uvm_pascal_fault_buffer.h
+|       |-- uvm_pascal_host.c
+|       |-- uvm_pascal_mmu.c
+|       |-- uvm_peer_identity_mappings_test.c
+|       |-- uvm_perf_events.c
+|       |-- uvm_perf_events.h
+|       |-- uvm_perf_events_test.c
+|       |-- uvm_perf_heuristics.c
+|       |-- uvm_perf_heuristics.h
+|       |-- uvm_perf_module.c
+|       |-- uvm_perf_module.h
+|       |-- uvm_perf_module_test.c
+|       |-- uvm_perf_prefetch.c
+|       |-- uvm_perf_prefetch.h
+|       |-- uvm_perf_thrashing.c
+|       |-- uvm_perf_thrashing.h
+|       |-- uvm_perf_utils.c
+|       |-- uvm_perf_utils.h
+|       |-- uvm_perf_utils_test.c
+|       |-- uvm_pmm_gpu.c
+|       |-- uvm_pmm_gpu.h
+|       |-- uvm_pmm_sysmem.c
+|       |-- uvm_pmm_sysmem.h
+|       |-- uvm_pmm_sysmem_test.c
+|       |-- uvm_pmm_test.c
+|       |-- uvm_policy.c
+|       |-- uvm_populate_pageable.c
+|       |-- uvm_populate_pageable.h
+|       |-- uvm_processors.c
+|       |-- uvm_processors.h
+|       |-- uvm_procfs.c
+|       |-- uvm_procfs.h
+|       |-- uvm_pte_batch.c
+|       |-- uvm_pte_batch.h
+|       |-- uvm_push.c
+|       |-- uvm_push.h
+|       |-- uvm_push_macros.h
+|       |-- uvm_push_test.c
+|       |-- uvm_pushbuffer.c
+|       |-- uvm_pushbuffer.h
+|       |-- uvm_range_allocator.c
+|       |-- uvm_range_allocator.h
+|       |-- uvm_range_allocator_test.c
+|       |-- uvm_range_group.c
+|       |-- uvm_range_group.h
+|       |-- uvm_range_group_tree_test.c
+|       |-- uvm_range_tree.c
+|       |-- uvm_range_tree.h
+|       |-- uvm_range_tree_test.c
+|       |-- uvm_rb_tree.c
+|       |-- uvm_rb_tree.h
+|       |-- uvm_rb_tree_test.c
+|       |-- uvm_rm_mem.c
+|       |-- uvm_rm_mem.h
+|       |-- uvm_rm_mem_test.c
+|       |-- uvm_sec2_test.c
+|       |-- uvm_test.c
+|       |-- uvm_test.h
+|       |-- uvm_test_file.c
+|       |-- uvm_test_file.h
+|       |-- uvm_test_ioctl.h
+|       |-- uvm_test_rng.c
+|       |-- uvm_test_rng.h
+|       |-- uvm_thread_context.c
+|       |-- uvm_thread_context.h
+|       |-- uvm_thread_context_test.c
+|       |-- uvm_tlb_batch.c
+|       |-- uvm_tlb_batch.h
+|       |-- uvm_tools.c
+|       |-- uvm_tools.h
+|       |-- uvm_tools_init.h
+|       |-- uvm_tracker.c
+|       |-- uvm_tracker.h
+|       |-- uvm_tracker_test.c
+|       |-- uvm_turing.c
+|       |-- uvm_turing_access_counter_buffer.c
+|       |-- uvm_turing_fault_buffer.c
+|       |-- uvm_turing_fault_buffer.h
+|       |-- uvm_turing_host.c
+|       |-- uvm_turing_mmu.c
+|       |-- uvm_types.h
+|       |-- uvm_unit_test.h
+|       |-- uvm_user_channel.c
+|       |-- uvm_user_channel.h
+|       |-- uvm_va_block.c
+|       |-- uvm_va_block.h
+|       |-- uvm_va_block_test.c
+|       |-- uvm_va_block_types.h
+|       |-- uvm_va_policy.c
+|       |-- uvm_va_policy.h
+|       |-- uvm_va_range.c
+|       |-- uvm_va_range.h
+|       |-- uvm_va_range_device_p2p.c
+|       |-- uvm_va_space.c
+|       |-- uvm_va_space.h
+|       |-- uvm_va_space_mm.c
+|       |-- uvm_va_space_mm.h
+|       |-- uvm_volta.c
+|       |-- uvm_volta_ce.c
+|       |-- uvm_volta_fault_buffer.c
+|       |-- uvm_volta_fault_buffer.h
+|       |-- uvm_volta_host.c
+|       `-- uvm_volta_mmu.c
+`-- mkprecompiled
+
+12 directories, 380 files
 + echo -e '\n========== NVIDIA Software Installer ==========\n'
 ========== NVIDIA Software Installer ==========
 + echo -e 'Starting installation of NVIDIA driver version 580.126.20 for Linux kernel version 5.15.0-173-generic\n'
 Starting installation of NVIDIA driver version 580.126.20 for Linux kernel version 5.15.0-173-generic
 + exec
 + flock -n 3
-+ echo 50175
++ echo 33414
 + trap 'echo '\''Caught signal'\''; exit 1' HUP INT QUIT PIPE TERM
 + trap _shutdown EXIT
++ tree -L 3 /var/run
+/var/run
+|-- lock
+|-- mellanox
+|   `-- drivers
+|       `-- usr
+|-- mount
+|-- nvidia
+|   |-- driver
+|   |   `-- lib
+|   |-- mps
+|   |-- nvidia-driver.pid
+|   |-- toolkit
+|   `-- validations
+|-- nvidia-fabricmanager
+|-- nvidia-topologyd
+|-- secrets
+|   `-- kubernetes.io
+|       `-- serviceaccount
+`-- systemd
+    `-- container
+
+17 directories, 2 files
++ tree -L 3 /sys/module/
+/sys/module/
+|-- 8250
+|   |-- parameters
+|   |   |-- nr_uarts
+|   |   |-- probe_rsa
+|   |   |-- share_irqs
+|   |   `-- skip_txen_test
+|   `-- uevent
+|-- acpi
+|   |-- parameters
+|   |   |-- acpica_version
+|   |   |-- aml_debug_output
+|   |   |-- debug_layer
+|   |   |-- debug_level
+|   |   |-- ec_busy_polling
+|   |   |-- ec_delay
+|   |   |-- ec_event_clearing
+|   |   |-- ec_freeze_events
+|   |   |-- ec_max_queries
+|   |   |-- ec_no_wakeup
+|   |   |-- ec_polling_guard
+|   |   |-- ec_storm_threshold
+|   |   |-- immediate_undock
+|   |   |-- sleep_no_lps0
+|   |   |-- trace_debug_layer
+|   |   |-- trace_debug_level
+|   |   |-- trace_method_name
+|   |   `-- trace_state
+|   `-- uevent
+|-- acpi_cpufreq
+|   |-- parameters
+|   |   `-- acpi_pstate_strict
+|   `-- uevent
+|-- acpiphp
+|   |-- parameters
+|   |   `-- disable
+|   `-- uevent
+|-- aesni_intel
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- apparmor
+|   |-- parameters
+|   |   |-- audit
+|   |   |-- audit_header
+|   |   |-- debug
+|   |   |-- enabled
+|   |   |-- hash_policy
+|   |   |-- lock_policy
+|   |   |-- logsyscall
+|   |   |-- mode
+|   |   |-- paranoid_load
+|   |   |-- path_max
+|   |   `-- rawdata_compression_level
+|   `-- uevent
+|-- async_memcpy
+|   |-- coresize
+|   |-- holders
+|   |   |-- async_raid6_recov -> ../../async_raid6_recov
+|   |   `-- raid456 -> ../../raid456
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- async_pq
+|   |-- coresize
+|   |-- holders
+|   |   |-- async_raid6_recov -> ../../async_raid6_recov
+|   |   `-- raid456 -> ../../raid456
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- async_raid6_recov
+|   |-- coresize
+|   |-- holders
+|   |   `-- raid456 -> ../../raid456
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- async_tx
+|   |-- coresize
+|   |-- holders
+|   |   |-- async_memcpy -> ../../async_memcpy
+|   |   |-- async_pq -> ../../async_pq
+|   |   |-- async_raid6_recov -> ../../async_raid6_recov
+|   |   |-- async_xor -> ../../async_xor
+|   |   `-- raid456 -> ../../raid456
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- async_xor
+|   |-- coresize
+|   |-- holders
+|   |   |-- async_pq -> ../../async_pq
+|   |   |-- async_raid6_recov -> ../../async_raid6_recov
+|   |   `-- raid456 -> ../../raid456
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ata_generic
+|   |-- drivers
+|   |   `-- pci:ata_generic -> ../../../bus/pci/drivers/ata_generic
+|   |-- uevent
+|   `-- version
+|-- ata_piix
+|   |-- drivers
+|   |   `-- pci:ata_piix -> ../../../bus/pci/drivers/ata_piix
+|   |-- uevent
+|   `-- version
+|-- autofs4
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- battery
+|   |-- parameters
+|   |   `-- cache_time
+|   `-- uevent
+|-- binfmt_misc
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- blake2b_generic
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __kcrctab
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- blk_cgroup
+|   |-- parameters
+|   |   `-- blkcg_debug_stats
+|   `-- uevent
+|-- blk_crypto
+|   |-- parameters
+|   |   `-- num_prealloc_crypt_ctxs
+|   `-- uevent
+|-- block
+|   |-- parameters
+|   |   `-- events_dfl_poll_msecs
+|   `-- uevent
+|-- bpfilter
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- br_netfilter
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- bridge
+|   |-- coresize
+|   |-- holders
+|   |   `-- br_netfilter -> ../../br_netfilter
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   |-- uevent
+|   `-- version
+|-- btrfs
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bpf_raw_tp_map
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __mcount_loc
+|   |   |-- __tracepoints
+|   |   |-- __tracepoints_ptrs
+|   |   |-- __tracepoints_strings
+|   |   |-- _error_injection_whitelist
+|   |   |-- _ftrace_eval_map
+|   |   `-- _ftrace_events
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- button
+|   |-- parameters
+|   |   |-- lid_init_state
+|   |   `-- lid_report_interval
+|   `-- uevent
+|-- chacha_x86_64
+|   |-- coresize
+|   |-- holders
+|   |   `-- libchacha20poly1305 -> ../../libchacha20poly1305
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __jump_table
+|   |   |-- __kcrctab
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- clocksource
+|   |-- parameters
+|   |   `-- verify_n_cpus
+|   `-- uevent
+|-- configfs
+|   |-- uevent
+|   `-- version
+|-- cpufreq
+|   |-- parameters
+|   |   |-- default_governor
+|   |   `-- off
+|   `-- uevent
+|-- cpuidle
+|   |-- parameters
+|   |   |-- governor
+|   |   `-- off
+|   `-- uevent
+|-- crc32_pclmul
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- crc_t10dif
+|   |-- parameters
+|   |   `-- transform
+|   `-- uevent
+|-- crct10dif_pclmul
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- cryptd
+|   |-- coresize
+|   |-- holders
+|   |   |-- crypto_simd -> ../../crypto_simd
+|   |   `-- ghash_clmulni_intel -> ../../ghash_clmulni_intel
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- crypto_simd
+|   |-- coresize
+|   |-- holders
+|   |   `-- aesni_intel -> ../../aesni_intel
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- cryptomgr
+|   |-- parameters
+|   |   |-- notests
+|   |   `-- panic_on_fail
+|   `-- uevent
+|-- curve25519_x86_64
+|   |-- coresize
+|   |-- holders
+|   |   `-- wireguard -> ../../wireguard
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __jump_table
+|   |   |-- __kcrctab
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- debug_core
+|   |-- parameters
+|   |   |-- kgdb_use_con
+|   |   `-- kgdbreboot
+|   `-- uevent
+|-- device_hmem
+|   |-- parameters
+|   |   `-- disable
+|   `-- uevent
+|-- dm_mod
+|   |-- parameters
+|   |   |-- dm_mq_nr_hw_queues
+|   |   |-- dm_mq_queue_depth
+|   |   |-- dm_numa_node
+|   |   |-- kcopyd_subjob_size_kb
+|   |   |-- reserved_bio_based_ios
+|   |   |-- reserved_rq_based_ios
+|   |   |-- stats_current_allocated_bytes
+|   |   |-- swap_bios
+|   |   `-- use_blk_mq
+|   `-- uevent
+|-- dm_multipath
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   `-- queue_if_no_path_timeout_secs
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- dns_resolver
+|   |-- parameters
+|   |   `-- debug
+|   `-- uevent
+|-- drm
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   |-- debug
+|   |   |-- edid_firmware
+|   |   |-- edid_fixup
+|   |   |-- timestamp_precision_usec
+|   |   `-- vblankoffdelay
+|   |-- refcnt
+|   |-- sections
+|   |   |-- ___srcu_struct_ptrs
+|   |   |-- __bpf_raw_tp_map
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   |-- __mcount_loc
+|   |   |-- __param
+|   |   |-- __tracepoints
+|   |   |-- __tracepoints_ptrs
+|   |   |-- __tracepoints_strings
+|   |   `-- _ftrace_events
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- dummy
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- dynamic_debug
+|   |-- parameters
+|   |   `-- verbose
+|   `-- uevent
+|-- edac_core
+|   |-- parameters
+|   |   |-- check_pci_errors
+|   |   |-- edac_mc_log_ce
+|   |   |-- edac_mc_log_ue
+|   |   |-- edac_mc_panic_on_ue
+|   |   |-- edac_mc_poll_msec
+|   |   `-- edac_pci_panic_on_pe
+|   `-- uevent
+|-- edd
+|   |-- uevent
+|   `-- version
+|-- efi_pstore
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   `-- pstore_disable
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- efivars
+|   |-- uevent
+|   `-- version
+|-- ehci_hcd
+|   |-- parameters
+|   |   |-- ignore_oc
+|   |   |-- log2_irq_thresh
+|   |   `-- park
+|   `-- uevent
+|-- failover
+|   |-- coresize
+|   |-- holders
+|   |   `-- net_failover -> ../../net_failover
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- fb
+|   |-- parameters
+|   |   `-- lockless_register_fb
+|   `-- uevent
+|-- firmware_class
+|   |-- parameters
+|   |   `-- path
+|   `-- uevent
+|-- floppy
+|   |-- coresize
+|   |-- drivers
+|   |   `-- platform:floppy -> ../../../bus/platform/drivers/floppy
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- fscrypto
+|   |-- parameters
+|   |   `-- num_prealloc_crypto_pages
+|   `-- uevent
+|-- fuse
+|   |-- parameters
+|   |   |-- max_user_bgreq
+|   |   `-- max_user_congthresh
+|   `-- uevent
+|-- ghash_clmulni_intel
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- gpiolib_acpi
+|   |-- parameters
+|   |   |-- ignore_wake
+|   |   `-- run_edge_events_on_boot
+|   `-- uevent
+|-- haltpoll
+|   |-- parameters
+|   |   |-- guest_halt_poll_allow_shrink
+|   |   |-- guest_halt_poll_grow
+|   |   |-- guest_halt_poll_grow_start
+|   |   |-- guest_halt_poll_ns
+|   |   `-- guest_halt_poll_shrink
+|   `-- uevent
+|-- hid
+|   |-- coresize
+|   |-- holders
+|   |   |-- hid_generic -> ../../hid_generic
+|   |   `-- usbhid -> ../../usbhid
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   |-- debug
+|   |   `-- ignore_special_drivers
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- hid_generic
+|   |-- coresize
+|   |-- drivers
+|   |   `-- hid:hid-generic -> ../../../bus/hid/drivers/hid-generic
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- i8042
+|   |-- parameters
+|   |   |-- debug
+|   |   `-- unmask_kbd_data
+|   `-- uevent
+|-- ifb
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ima
+|   |-- parameters
+|   |   |-- ahash_bufsize
+|   |   `-- ahash_minsize
+|   `-- uevent
+|-- input_leds
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- intel_idle
+|   |-- parameters
+|   |   |-- max_cstate
+|   |   |-- no_acpi
+|   |   |-- preferred_cstates
+|   |   |-- states_off
+|   |   `-- use_acpi
+|   `-- uevent
+|-- intel_pmc_core
+|   |-- parameters
+|   |   `-- warn_on_s0ix_failures
+|   `-- uevent
+|-- ip6_tables
+|   |-- coresize
+|   |-- holders
+|   |   |-- ip6table_filter -> ../../ip6table_filter
+|   |   |-- ip6table_mangle -> ../../ip6table_mangle
+|   |   `-- ip6table_nat -> ../../ip6table_nat
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __jump_table
+|   |   |-- __kcrctab
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip6_udp_tunnel
+|   |-- coresize
+|   |-- holders
+|   |   |-- vxlan -> ../../vxlan
+|   |   `-- wireguard -> ../../wireguard
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip6t_REJECT
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip6table_filter
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip6table_mangle
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip6table_nat
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_set
+|   |-- coresize
+|   |-- holders
+|   |   |-- ip_set_bitmap_port -> ../../ip_set_bitmap_port
+|   |   |-- ip_set_hash_ip -> ../../ip_set_hash_ip
+|   |   |-- ip_set_hash_ipport -> ../../ip_set_hash_ipport
+|   |   |-- ip_set_hash_ipportip -> ../../ip_set_hash_ipportip
+|   |   |-- ip_set_hash_ipportnet -> ../../ip_set_hash_ipportnet
+|   |   |-- ip_set_hash_net -> ../../ip_set_hash_net
+|   |   `-- xt_set -> ../../xt_set
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   `-- max_sets
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_set_bitmap_port
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_set_hash_ip
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_set_hash_ipport
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_set_hash_ipportip
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_set_hash_ipportnet
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_set_hash_net
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_tables
+|   |-- coresize
+|   |-- holders
+|   |   |-- iptable_filter -> ../../iptable_filter
+|   |   |-- iptable_mangle -> ../../iptable_mangle
+|   |   |-- iptable_nat -> ../../iptable_nat
+|   |   `-- iptable_raw -> ../../iptable_raw
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __jump_table
+|   |   |-- __kcrctab
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_vs
+|   |-- coresize
+|   |-- holders
+|   |   |-- ip_vs_dh -> ../../ip_vs_dh
+|   |   |-- ip_vs_fo -> ../../ip_vs_fo
+|   |   |-- ip_vs_ftp -> ../../ip_vs_ftp
+|   |   |-- ip_vs_lblc -> ../../ip_vs_lblc
+|   |   |-- ip_vs_lblcr -> ../../ip_vs_lblcr
+|   |   |-- ip_vs_lc -> ../../ip_vs_lc
+|   |   |-- ip_vs_nq -> ../../ip_vs_nq
+|   |   |-- ip_vs_rr -> ../../ip_vs_rr
+|   |   |-- ip_vs_sed -> ../../ip_vs_sed
+|   |   |-- ip_vs_sh -> ../../ip_vs_sh
+|   |   |-- ip_vs_wlc -> ../../ip_vs_wlc
+|   |   `-- ip_vs_wrr -> ../../ip_vs_wrr
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   `-- conn_tab_bits
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_vs_dh
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_vs_fo
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_vs_ftp
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   `-- ports
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_vs_lblc
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_vs_lblcr
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_vs_lc
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_vs_nq
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_vs_rr
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_vs_sed
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_vs_sh
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_vs_wlc
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ip_vs_wrr
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ipt_REJECT
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ipt_rpfilter
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- iptable_filter
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- iptable_mangle
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- iptable_nat
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- iptable_raw
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ipv6
+|   |-- parameters
+|   |   |-- autoconf
+|   |   |-- disable
+|   |   `-- disable_ipv6
+|   `-- uevent
+|-- joydev
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- kdb
+|   |-- parameters
+|   |   |-- cmd_enable
+|   |   `-- enable_nmi
+|   `-- uevent
+|-- kernel
+|   |-- parameters
+|   |   |-- consoleblank
+|   |   |-- crash_kexec_post_notifiers
+|   |   |-- ignore_rlimit_data
+|   |   |-- initcall_debug
+|   |   |-- module_blacklist
+|   |   |-- panic
+|   |   |-- panic_on_warn
+|   |   |-- panic_print
+|   |   `-- pause_on_oops
+|   `-- uevent
+|-- keyboard
+|   |-- parameters
+|   |   |-- brl_nbchords
+|   |   `-- brl_timeout
+|   `-- uevent
+|-- kfence
+|   |-- parameters
+|   |   |-- check_on_panic
+|   |   |-- deferrable
+|   |   |-- sample_interval
+|   |   `-- skip_covered_thresh
+|   `-- uevent
+|-- kgdb_nmi
+|   |-- parameters
+|   |   |-- knock
+|   |   `-- magic
+|   `-- uevent
+|-- kgdboc
+|   |-- parameters
+|   |   `-- kgdboc
+|   `-- uevent
+|-- kvm
+|   |-- coresize
+|   |-- holders
+|   |   `-- kvm_intel -> ../../kvm_intel
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   |-- enable_vmware_backdoor
+|   |   |-- flush_on_reuse
+|   |   |-- force_emulation_prefix
+|   |   |-- halt_poll_ns
+|   |   |-- halt_poll_ns_grow
+|   |   |-- halt_poll_ns_grow_start
+|   |   |-- halt_poll_ns_shrink
+|   |   |-- ignore_msrs
+|   |   |-- kvmclock_periodic_sync
+|   |   |-- lapic_timer_advance_ns
+|   |   |-- min_timer_period_us
+|   |   |-- mitigate_smt_rsb
+|   |   |-- mmio_caching
+|   |   |-- nx_huge_pages
+|   |   |-- nx_huge_pages_recovery_ratio
+|   |   |-- pi_inject_timer
+|   |   |-- report_ignored_msrs
+|   |   |-- tdp_mmu
+|   |   |-- tsc_tolerance_ppm
+|   |   `-- vector_hashing
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bpf_raw_tp_map
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __ex_table
+|   |   |-- __jump_table
+|   |   |-- __kcrctab
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   |-- __mcount_loc
+|   |   |-- __param
+|   |   |-- __tracepoints
+|   |   |-- __tracepoints_ptrs
+|   |   |-- __tracepoints_strings
+|   |   |-- _ftrace_eval_map
+|   |   `-- _ftrace_events
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- kvm_intel
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   |-- allow_smaller_maxphyaddr
+|   |   |-- dump_invalid_vmcs
+|   |   |-- emulate_invalid_guest_state
+|   |   |-- enable_apicv
+|   |   |-- enable_shadow_vmcs
+|   |   |-- enlightened_vmcs
+|   |   |-- ept
+|   |   |-- eptad
+|   |   |-- fasteoi
+|   |   |-- flexpriority
+|   |   |-- nested
+|   |   |-- nested_early_check
+|   |   |-- ple_gap
+|   |   |-- ple_window
+|   |   |-- ple_window_grow
+|   |   |-- ple_window_max
+|   |   |-- ple_window_shrink
+|   |   |-- pml
+|   |   |-- preemption_timer
+|   |   |-- sgx
+|   |   |-- unrestricted_guest
+|   |   |-- vmentry_l1d_flush
+|   |   |-- vnmi
+|   |   `-- vpid
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __ex_table
+|   |   |-- __jump_table
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- libata
+|   |-- parameters
+|   |   |-- acpi_gtf_filter
+|   |   |-- allow_tpm
+|   |   |-- ata_probe_timeout
+|   |   |-- atapi_an
+|   |   |-- atapi_dmadir
+|   |   |-- atapi_enabled
+|   |   |-- atapi_passthru16
+|   |   |-- dma
+|   |   |-- fua
+|   |   |-- ignore_hpa
+|   |   |-- noacpi
+|   |   `-- zpodd_poweroff_delay
+|   |-- uevent
+|   `-- version
+|-- libchacha
+|   |-- coresize
+|   |-- holders
+|   |   `-- chacha_x86_64 -> ../../chacha_x86_64
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __kcrctab
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- libchacha20poly1305
+|   |-- coresize
+|   |-- holders
+|   |   `-- wireguard -> ../../wireguard
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __kcrctab
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- libcrc32c
+|   |-- coresize
+|   |-- holders
+|   |   |-- btrfs -> ../../btrfs
+|   |   |-- ip_vs -> ../../ip_vs
+|   |   |-- nf_conntrack -> ../../nf_conntrack
+|   |   |-- nf_nat -> ../../nf_nat
+|   |   |-- nf_tables -> ../../nf_tables
+|   |   |-- openvswitch -> ../../openvswitch
+|   |   `-- raid456 -> ../../raid456
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __kcrctab
+|   |   |-- __ksymtab
+|   |   `-- __ksymtab_strings
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- libcurve25519_generic
+|   |-- coresize
+|   |-- holders
+|   |   |-- curve25519_x86_64 -> ../../curve25519_x86_64
+|   |   `-- wireguard -> ../../wireguard
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __kcrctab
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- libnvdimm
+|   |-- drivers
+|   |   |-- nd:nd_bus -> ../../../bus/nd/drivers/nd_bus
+|   |   |-- nd:nd_region -> ../../../bus/nd/drivers/nd_region
+|   |   `-- nd:nvdimm -> ../../../bus/nd/drivers/nvdimm
+|   |-- parameters
+|   |   |-- key_revalidate
+|   |   `-- noblk
+|   `-- uevent
+|-- linear
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- llc
+|   |-- coresize
+|   |-- holders
+|   |   |-- bridge -> ../../bridge
+|   |   `-- stp -> ../../stp
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __kcrctab
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- loop
+|   |-- parameters
+|   |   |-- max_loop
+|   |   `-- max_part
+|   `-- uevent
+|-- md_mod
+|   |-- parameters
+|   |   |-- create_on_open
+|   |   |-- new_array
+|   |   |-- start_dirty_degraded
+|   |   `-- start_ro
+|   `-- uevent
+|-- memory_hotplug
+|   |-- parameters
+|   |   |-- auto_movable_numa_aware
+|   |   |-- auto_movable_ratio
+|   |   |-- memmap_on_memory
+|   |   `-- online_policy
+|   `-- uevent
+|-- module
+|   |-- parameters
+|   |   |-- async_probe
+|   |   `-- sig_enforce
+|   `-- uevent
+|-- mousedev
+|   |-- parameters
+|   |   |-- tap_time
+|   |   |-- xres
+|   |   `-- yres
+|   `-- uevent
+|-- multipath
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- net_failover
+|   |-- coresize
+|   |-- holders
+|   |   `-- virtio_net -> ../../virtio_net
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- netpoll
+|   |-- parameters
+|   |   `-- carrier_timeout
+|   `-- uevent
+|-- nf_conncount
+|   |-- coresize
+|   |-- holders
+|   |   `-- openvswitch -> ../../openvswitch
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __jump_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- nf_conntrack
+|   |-- coresize
+|   |-- holders
+|   |   |-- ip_vs -> ../../ip_vs
+|   |   |-- nf_conncount -> ../../nf_conncount
+|   |   |-- nf_conntrack_netlink -> ../../nf_conntrack_netlink
+|   |   |-- nf_nat -> ../../nf_nat
+|   |   |-- openvswitch -> ../../openvswitch
+|   |   |-- xt_MASQUERADE -> ../../xt_MASQUERADE
+|   |   |-- xt_conntrack -> ../../xt_conntrack
+|   |   `-- xt_nat -> ../../xt_nat
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   |-- acct
+|   |   |-- expect_hashsize
+|   |   |-- hashsize
+|   |   |-- nf_conntrack_helper
+|   |   `-- tstamp
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- nf_conntrack_netlink
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- nf_defrag_ipv4
+|   |-- coresize
+|   |-- holders
+|   |   `-- nf_conntrack -> ../../nf_conntrack
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- nf_defrag_ipv6
+|   |-- coresize
+|   |-- holders
+|   |   |-- ip_vs -> ../../ip_vs
+|   |   |-- nf_conntrack -> ../../nf_conntrack
+|   |   `-- openvswitch -> ../../openvswitch
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- nf_nat
+|   |-- coresize
+|   |-- holders
+|   |   |-- ip6table_nat -> ../../ip6table_nat
+|   |   |-- ip_vs_ftp -> ../../ip_vs_ftp
+|   |   |-- iptable_nat -> ../../iptable_nat
+|   |   |-- nft_chain_nat -> ../../nft_chain_nat
+|   |   |-- openvswitch -> ../../openvswitch
+|   |   |-- xt_MASQUERADE -> ../../xt_MASQUERADE
+|   |   `-- xt_nat -> ../../xt_nat
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- nf_reject_ipv4
+|   |-- coresize
+|   |-- holders
+|   |   `-- ipt_REJECT -> ../../ipt_REJECT
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- nf_reject_ipv6
+|   |-- coresize
+|   |-- holders
+|   |   `-- ip6t_REJECT -> ../../ip6t_REJECT
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- nf_tables
+|   |-- coresize
+|   |-- holders
+|   |   |-- nft_chain_nat -> ../../nft_chain_nat
+|   |   |-- nft_compat -> ../../nft_compat
+|   |   `-- nft_counter -> ../../nft_counter
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __jump_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- nfnetlink
+|   |-- coresize
+|   |-- holders
+|   |   |-- ip_set -> ../../ip_set
+|   |   |-- nf_conntrack_netlink -> ../../nf_conntrack_netlink
+|   |   |-- nf_tables -> ../../nf_tables
+|   |   `-- nft_compat -> ../../nft_compat
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- nft_chain_nat
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- nft_compat
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- nft_counter
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- nls_iso8859_1
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- nmi_backtrace
+|   |-- parameters
+|   |   `-- backtrace_idle
+|   `-- uevent
+|-- nsh
+|   |-- coresize
+|   |-- holders
+|   |   `-- openvswitch -> ../../openvswitch
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- openvswitch
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bpf_raw_tp_map
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   |-- __mcount_loc
+|   |   |-- __tracepoints
+|   |   |-- __tracepoints_ptrs
+|   |   |-- __tracepoints_strings
+|   |   `-- _ftrace_events
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- overlay
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   |-- check_copy_up
+|   |   |-- index
+|   |   |-- metacopy
+|   |   |-- nfs_export
+|   |   |-- redirect_always_follow
+|   |   |-- redirect_dir
+|   |   |-- redirect_max
+|   |   `-- xino_auto
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- page_alloc
+|   |-- parameters
+|   |   `-- shuffle
+|   `-- uevent
+|-- page_reporting
+|   |-- parameters
+|   |   `-- page_reporting_order
+|   `-- uevent
+|-- pata_sis
+|   |-- drivers
+|   |   `-- pci:pata_sis -> ../../../bus/pci/drivers/pata_sis
+|   |-- uevent
+|   `-- version
+|-- pcc_cpufreq
+|   |-- uevent
+|   `-- version
+|-- pci_hotplug
+|   |-- parameters
+|   |   |-- debug
+|   |   `-- debug_acpi
+|   `-- uevent
+|-- pcie_aspm
+|   |-- parameters
+|   |   `-- policy
+|   `-- uevent
+|-- pciehp
+|   |-- parameters
+|   |   |-- pciehp_poll_mode
+|   |   `-- pciehp_poll_time
+|   `-- uevent
+|-- poly1305_x86_64
+|   |-- coresize
+|   |-- holders
+|   |   `-- libchacha20poly1305 -> ../../libchacha20poly1305
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __jump_table
+|   |   |-- __kcrctab
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- ppp_generic
+|   |-- parameters
+|   |   `-- mp_protocol_compress
+|   `-- uevent
+|-- printk
+|   |-- parameters
+|   |   |-- always_kmsg_dump
+|   |   |-- console_no_auto_verbose
+|   |   |-- console_suspend
+|   |   |-- ignore_loglevel
+|   |   `-- time
+|   `-- uevent
+|-- processor
+|   |-- parameters
+|   |   |-- ignore_ppc
+|   |   |-- ignore_tpc
+|   |   `-- latency_factor
+|   `-- uevent
+|-- psmouse
+|   |-- coresize
+|   |-- drivers
+|   |   `-- serio:psmouse -> ../../../bus/serio/drivers/psmouse
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   |-- a4tech_workaround
+|   |   |-- elantech_smbus
+|   |   |-- proto
+|   |   |-- rate
+|   |   |-- resetafter
+|   |   |-- resolution
+|   |   |-- resync_time
+|   |   |-- smartscroll
+|   |   `-- synaptics_intertouch
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- pstore
+|   |-- parameters
+|   |   |-- backend
+|   |   |-- compress
+|   |   `-- update_ms
+|   `-- uevent
+|-- pvpanic
+|   |-- coresize
+|   |-- holders
+|   |   `-- pvpanic_mmio -> ../../pvpanic_mmio
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- pvpanic_mmio
+|   |-- coresize
+|   |-- drivers
+|   |   `-- platform:pvpanic-mmio -> ../../../bus/platform/drivers/pvpanic-mmio
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- raid0
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   `-- default_layout
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- raid1
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- raid10
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- raid456
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   `-- devices_handle_discard_safely
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_strings
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- raid6_pq
+|   |-- coresize
+|   |-- holders
+|   |   |-- async_pq -> ../../async_pq
+|   |   |-- async_raid6_recov -> ../../async_raid6_recov
+|   |   |-- btrfs -> ../../btrfs
+|   |   `-- raid456 -> ../../raid456
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __kcrctab
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- random
+|   |-- parameters
+|   |   `-- ratelimit_disable
+|   `-- uevent
+|-- rcupdate
+|   |-- parameters
+|   |   |-- rcu_cpu_stall_ftrace_dump
+|   |   |-- rcu_cpu_stall_suppress
+|   |   |-- rcu_cpu_stall_suppress_at_boot
+|   |   |-- rcu_cpu_stall_timeout
+|   |   |-- rcu_task_ipi_delay
+|   |   `-- rcu_task_stall_timeout
+|   `-- uevent
+|-- rcutree
+|   |-- parameters
+|   |   |-- blimit
+|   |   |-- dump_tree
+|   |   |-- gp_cleanup_delay
+|   |   |-- gp_init_delay
+|   |   |-- gp_preinit_delay
+|   |   |-- jiffies_till_first_fqs
+|   |   |-- jiffies_till_next_fqs
+|   |   |-- jiffies_till_sched_qs
+|   |   |-- jiffies_to_sched_qs
+|   |   |-- kthread_prio
+|   |   |-- qhimark
+|   |   |-- qlowmark
+|   |   |-- qovld
+|   |   |-- rcu_delay_page_cache_fill_msec
+|   |   |-- rcu_divisor
+|   |   |-- rcu_fanout_exact
+|   |   |-- rcu_fanout_leaf
+|   |   |-- rcu_kick_kthreads
+|   |   |-- rcu_min_cached_objs
+|   |   |-- rcu_resched_ns
+|   |   |-- sysrq_rcu
+|   |   `-- use_softirq
+|   `-- uevent
+|-- rfkill
+|   |-- parameters
+|   |   `-- default_state
+|   `-- uevent
+|-- rng_core
+|   |-- parameters
+|   |   |-- current_quality
+|   |   `-- default_quality
+|   `-- uevent
+|-- rtc_cmos
+|   |-- parameters
+|   |   `-- use_acpi_alarm
+|   `-- uevent
+|-- sch_fq_codel
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- sch_htb
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   |-- htb_hysteresis
+|   |   `-- htb_rate_est
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- scsi_dh_alua
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   `-- optimize_stpg
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   |-- uevent
+|   `-- version
+|-- scsi_dh_emc
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- scsi_dh_rdac
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   `-- rdac_logging
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   |-- uevent
+|   `-- version
+|-- scsi_mod
+|   |-- parameters
+|   |   |-- default_dev_flags
+|   |   |-- eh_deadline
+|   |   |-- inq_timeout
+|   |   |-- max_luns
+|   |   |-- scan
+|   |   `-- scsi_logging_level
+|   `-- uevent
+|-- secretmem
+|   |-- parameters
+|   |   `-- enable
+|   `-- uevent
+|-- serio_raw
+|   |-- coresize
+|   |-- drivers
+|   |   `-- serio:serio_raw -> ../../../bus/serio/drivers/serio_raw
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- sg
+|   |-- parameters
+|   |   |-- allow_dio
+|   |   |-- def_reserved_size
+|   |   `-- scatter_elem_sz
+|   |-- uevent
+|   `-- version
+|-- sha1_ssse3
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- sha256_ssse3
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- shpchp
+|   |-- drivers
+|   |   `-- pci:shpchp -> ../../../bus/pci/drivers/shpchp
+|   |-- parameters
+|   |   |-- shpchp_debug
+|   |   |-- shpchp_poll_mode
+|   |   `-- shpchp_poll_time
+|   `-- uevent
+|-- slab_common
+|   |-- parameters
+|   |   `-- usercopy_fallback
+|   `-- uevent
+|-- spurious
+|   |-- parameters
+|   |   |-- irqfixup
+|   |   `-- noirqdebug
+|   `-- uevent
+|-- sr_mod
+|   |-- parameters
+|   |   `-- xa_test
+|   `-- uevent
+|-- srcutree
+|   |-- parameters
+|   |   |-- counter_wrap_check
+|   |   `-- exp_holdoff
+|   `-- uevent
+|-- stp
+|   |-- coresize
+|   |-- holders
+|   |   `-- bridge -> ../../bridge
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- sunrpc
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   |-- auth_hashtable_size
+|   |   |-- auth_max_cred_cachesize
+|   |   |-- max_resvport
+|   |   |-- min_resvport
+|   |   |-- pool_mode
+|   |   |-- svc_rpc_per_connection_limit
+|   |   |-- tcp_max_slot_table_entries
+|   |   |-- tcp_slot_table_entries
+|   |   `-- udp_slot_table_entries
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bpf_raw_tp_map
+|   |   |-- __bug_table
+|   |   |-- __jump_table
+|   |   |-- __kcrctab
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   |-- __mcount_loc
+|   |   |-- __param
+|   |   |-- __tracepoints
+|   |   |-- __tracepoints_ptrs
+|   |   |-- __tracepoints_strings
+|   |   |-- _ftrace_eval_map
+|   |   `-- _ftrace_events
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- suspend
+|   |-- parameters
+|   |   `-- pm_test_delay
+|   `-- uevent
+|-- sysrq
+|   |-- parameters
+|   |   |-- reset_seq
+|   |   `-- sysrq_downtime_ms
+|   `-- uevent
+|-- tap
+|   |-- coresize
+|   |-- holders
+|   |   `-- vhost_net -> ../../vhost_net
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- tcp_cubic
+|   |-- parameters
+|   |   |-- beta
+|   |   |-- bic_scale
+|   |   |-- fast_convergence
+|   |   |-- hystart
+|   |   |-- hystart_ack_delta_us
+|   |   |-- hystart_detect
+|   |   |-- hystart_low_window
+|   |   |-- initial_ssthresh
+|   |   `-- tcp_friendliness
+|   |-- uevent
+|   `-- version
+|-- thermal
+|   |-- parameters
+|   |   |-- act
+|   |   |-- crt
+|   |   |-- psv
+|   |   `-- tzp
+|   `-- uevent
+|-- tpm
+|   |-- parameters
+|   |   `-- suspend_pcr
+|   |-- uevent
+|   `-- version
+|-- tpm_crb
+|   |-- uevent
+|   `-- version
+|-- tpm_tis
+|   |-- parameters
+|   |   |-- force
+|   |   |-- hid
+|   |   |-- interrupts
+|   |   `-- itpm
+|   |-- uevent
+|   `-- version
+|-- tpm_tis_core
+|   |-- uevent
+|   `-- version
+|-- udmabuf
+|   |-- parameters
+|   |   |-- list_limit
+|   |   `-- size_limit_mb
+|   `-- uevent
+|-- udp_tunnel
+|   |-- coresize
+|   |-- holders
+|   |   |-- vxlan -> ../../vxlan
+|   |   `-- wireguard -> ../../wireguard
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __kcrctab
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- uhci_hcd
+|   |-- drivers
+|   |   `-- pci:uhci_hcd -> ../../../bus/pci/drivers/uhci_hcd
+|   |-- parameters
+|   |   |-- debug
+|   |   `-- ignore_oc
+|   `-- uevent
+|-- usbcore
+|   |-- drivers
+|   |   |-- usb:hub -> ../../../bus/usb/drivers/hub
+|   |   `-- usb:usbfs -> ../../../bus/usb/drivers/usbfs
+|   |-- parameters
+|   |   |-- authorized_default
+|   |   |-- autosuspend
+|   |   |-- blinkenlights
+|   |   |-- initial_descriptor_timeout
+|   |   |-- nousb
+|   |   |-- old_scheme_first
+|   |   |-- quirks
+|   |   |-- usbfs_memory_mb
+|   |   |-- usbfs_snoop
+|   |   |-- usbfs_snoop_max
+|   |   `-- use_both_schemes
+|   `-- uevent
+|-- usbhid
+|   |-- coresize
+|   |-- drivers
+|   |   `-- usb:usbhid -> ../../../bus/usb/drivers/usbhid
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   |-- ignoreled
+|   |   |-- jspoll
+|   |   |-- kbpoll
+|   |   |-- mousepoll
+|   |   `-- quirks
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- uv_nmi
+|   |-- parameters
+|   |   |-- action
+|   |   |-- debug
+|   |   |-- dump_loglevel
+|   |   |-- initial_delay
+|   |   |-- loop_delay
+|   |   |-- nmi_count
+|   |   |-- nmi_misses
+|   |   |-- pch_init_enable
+|   |   |-- pch_intr_enable
+|   |   |-- ping_count
+|   |   |-- ping_misses
+|   |   |-- retry_count
+|   |   |-- slave_delay
+|   |   |-- trigger_delay
+|   |   `-- wait_count
+|   `-- uevent
+|-- veth
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- vfio
+|   |-- parameters
+|   |   `-- enable_unsafe_noiommu_mode
+|   |-- uevent
+|   `-- version
+|-- vfio_iommu_type1
+|   |-- parameters
+|   |   |-- allow_unsafe_interrupts
+|   |   |-- disable_hugepages
+|   |   `-- dma_entry_limit
+|   |-- uevent
+|   `-- version
+|-- vfio_pci
+|   |-- drivers
+|   |   `-- pci:vfio-pci -> ../../../bus/pci/drivers/vfio-pci
+|   |-- parameters
+|   |   |-- disable_denylist
+|   |   |-- disable_idle_d3
+|   |   |-- disable_vga
+|   |   |-- enable_sriov
+|   |   `-- nointxmask
+|   `-- uevent
+|-- vfio_virqfd
+|   |-- uevent
+|   `-- version
+|-- vhost
+|   |-- coresize
+|   |-- holders
+|   |   `-- vhost_net -> ../../vhost_net
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   |-- max_iotlb_entries
+|   |   `-- max_mem_regions
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   |-- uevent
+|   `-- version
+|-- vhost_iotlb
+|   |-- coresize
+|   |-- holders
+|   |   `-- vhost -> ../../vhost
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   |-- uevent
+|   `-- version
+|-- vhost_net
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   `-- experimental_zcopytx
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   |-- uevent
+|   `-- version
+|-- virtio_mmio
+|   |-- parameters
+|   |   `-- device
+|   `-- uevent
+|-- virtio_net
+|   |-- coresize
+|   |-- drivers
+|   |   `-- virtio:virtio_net -> ../../../bus/virtio/drivers/virtio_net
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   |-- csum
+|   |   |-- gso
+|   |   |-- napi_tx
+|   |   `-- napi_weight
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- virtio_pci
+|   |-- drivers
+|   |   `-- pci:virtio-pci -> ../../../bus/pci/drivers/virtio-pci
+|   |-- parameters
+|   |   `-- force_legacy
+|   |-- uevent
+|   `-- version
+|-- virtio_pci_modern_dev
+|   |-- uevent
+|   `-- version
+|-- virtio_rng
+|   |-- coresize
+|   |-- drivers
+|   |   `-- virtio:virtio_rng -> ../../../bus/virtio/drivers/virtio_rng
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- virtio_scsi
+|   |-- coresize
+|   |-- drivers
+|   |   `-- virtio:virtio_scsi -> ../../../bus/virtio/drivers/virtio_scsi
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- vt
+|   |-- parameters
+|   |   |-- color
+|   |   |-- cur_default
+|   |   |-- default_blu
+|   |   |-- default_grn
+|   |   |-- default_red
+|   |   |-- default_utf8
+|   |   |-- global_cursor_default
+|   |   |-- italic
+|   |   `-- underline
+|   `-- uevent
+|-- vxlan
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- parameters
+|   |   |-- log_ecn_error
+|   |   `-- udp_port
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   |-- __mcount_loc
+|   |   `-- __param
+|   |-- srcversion
+|   |-- taint
+|   |-- uevent
+|   `-- version
+|-- watchdog
+|   |-- parameters
+|   |   |-- handle_boot_enabled
+|   |   |-- open_timeout
+|   |   `-- stop_on_reboot
+|   `-- uevent
+|-- wireguard
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   |-- uevent
+|   `-- version
+|-- workqueue
+|   |-- parameters
+|   |   |-- debug_force_rr_cpu
+|   |   |-- disable_numa
+|   |   `-- power_efficient
+|   `-- uevent
+|-- x_tables
+|   |-- coresize
+|   |-- holders
+|   |   |-- ip6_tables -> ../../ip6_tables
+|   |   |-- ip6t_REJECT -> ../../ip6t_REJECT
+|   |   |-- ip6table_filter -> ../../ip6table_filter
+|   |   |-- ip6table_mangle -> ../../ip6table_mangle
+|   |   |-- ip6table_nat -> ../../ip6table_nat
+|   |   |-- ip_tables -> ../../ip_tables
+|   |   |-- ipt_REJECT -> ../../ipt_REJECT
+|   |   |-- ipt_rpfilter -> ../../ipt_rpfilter
+|   |   |-- iptable_filter -> ../../iptable_filter
+|   |   |-- iptable_mangle -> ../../iptable_mangle
+|   |   |-- iptable_nat -> ../../iptable_nat
+|   |   |-- iptable_raw -> ../../iptable_raw
+|   |   |-- nft_compat -> ../../nft_compat
+|   |   |-- xt_MASQUERADE -> ../../xt_MASQUERADE
+|   |   |-- xt_addrtype -> ../../xt_addrtype
+|   |   |-- xt_comment -> ../../xt_comment
+|   |   |-- xt_conntrack -> ../../xt_conntrack
+|   |   |-- xt_mark -> ../../xt_mark
+|   |   |-- xt_multiport -> ../../xt_multiport
+|   |   |-- xt_nat -> ../../xt_nat
+|   |   |-- xt_set -> ../../xt_set
+|   |   `-- xt_tcpudp -> ../../xt_tcpudp
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- xen
+|   |-- parameters
+|   |   |-- balloon_boot_timeout
+|   |   |-- event_eoi_delay
+|   |   `-- event_loop_timeout
+|   `-- uevent
+|-- xen_acpi_processor
+|   |-- parameters
+|   |   `-- off
+|   `-- uevent
+|-- xen_blkfront
+|   |-- parameters
+|   |   |-- feature_persistent
+|   |   |-- max_indirect_segments
+|   |   |-- max_queues
+|   |   |-- max_ring_page_order
+|   |   `-- trusted
+|   `-- uevent
+|-- xen_netfront
+|   |-- parameters
+|   |   |-- max_queues
+|   |   `-- trusted
+|   `-- uevent
+|-- xhci_hcd
+|   |-- parameters
+|   |   |-- link_quirk
+|   |   `-- quirks
+|   `-- uevent
+|-- xhci_pci
+|   |-- coresize
+|   |-- drivers
+|   |   `-- pci:xhci_hcd -> ../../../bus/pci/drivers/xhci_hcd
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- xhci_pci_renesas
+|   |-- coresize
+|   |-- holders
+|   |   `-- xhci_pci -> ../../xhci_pci
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   |-- __kcrctab_gpl
+|   |   |-- __ksymtab_gpl
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- xor
+|   |-- coresize
+|   |-- holders
+|   |   |-- async_xor -> ../../async_xor
+|   |   `-- btrfs -> ../../btrfs
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __kcrctab
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- xt_MASQUERADE
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- xt_addrtype
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- xt_comment
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- xt_conntrack
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- xt_mark
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- xt_multiport
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- xt_nat
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __bug_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- xt_set
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- xt_tcpudp
+|   |-- coresize
+|   |-- holders
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __dyndbg
+|   |   |-- __jump_table
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+|-- xz_dec
+|   |-- uevent
+|   `-- version
+|-- zstd_compress
+|   |-- coresize
+|   |-- holders
+|   |   `-- btrfs -> ../../btrfs
+|   |-- initsize
+|   |-- initstate
+|   |-- notes
+|   |-- refcnt
+|   |-- sections
+|   |   |-- __kcrctab
+|   |   |-- __ksymtab
+|   |   |-- __ksymtab_strings
+|   |   `-- __mcount_loc
+|   |-- srcversion
+|   |-- taint
+|   `-- uevent
+`-- zswap
+    |-- parameters
+    |   |-- accept_threshold_percent
+    |   |-- compressor
+    |   |-- enabled
+    |   |-- max_pool_percent
+    |   |-- same_filled_pages_enabled
+    |   `-- zpool
+    `-- uevent
+
+943 directories, 2073 files
 + _unload_driver
 + rmmod_args=()
 + local rmmod_args
@@ -94,6 +3788,17 @@ Unloading NVIDIA driver kernel modules...
 + '[' 0 -gt 0 ']'
 + '[' 0 -gt 0 ']'
 + return 0
++ tree -L 3 /run/nvidia
+/run/nvidia
+|-- driver
+|   `-- lib
+|       `-- firmware
+|-- mps
+|-- nvidia-driver.pid
+|-- toolkit
+`-- validations
+
+6 directories, 1 file
 + _unmount_rootfs
 + echo 'Unmounting NVIDIA driver rootfs...'
 Unmounting NVIDIA driver rootfs...
@@ -103,7 +3808,407 @@ Unmounting NVIDIA driver rootfs...
 + local proc_mount_arg=
 + echo 'Checking NVIDIA driver packages...'
 Checking NVIDIA driver packages...
++ tree -L 3 /usr/src/nvidia-580.126.20
+/usr/src/nvidia-580.126.20
+|-- LICENSE
+|-- kernel
+|   |-- Kbuild
+|   |-- Makefile
+|   |-- common
+|   |   `-- inc
+|   |-- conftest.sh
+|   |-- count-lines.mk
+|   |-- header-presence-tests.mk
+|   |-- nvidia
+|   |   |-- detect-self-hosted.h
+|   |   |-- export_nvswitch.h
+|   |   |-- hal
+|   |   |-- i2c_nvswitch.c
+|   |   |-- internal
+|   |   |-- internal_crypt_lib.h
+|   |   |-- ioctl_common_nvswitch.h
+|   |   |-- ioctl_nvswitch.h
+|   |   |-- library
+|   |   |-- libspdm_aead.c
+|   |   |-- libspdm_aead_aes_gcm.c
+|   |   |-- libspdm_ec.c
+|   |   |-- libspdm_ecc.c
+|   |   |-- libspdm_hkdf.c
+|   |   |-- libspdm_hkdf_sha.c
+|   |   |-- libspdm_hmac_sha.c
+|   |   |-- libspdm_internal_crypt_lib.c
+|   |   |-- libspdm_rand.c
+|   |   |-- libspdm_rsa.c
+|   |   |-- libspdm_rsa_ext.c
+|   |   |-- libspdm_sha.c
+|   |   |-- libspdm_shash.c
+|   |   |-- libspdm_x509.c
+|   |   |-- linux_nvswitch.c
+|   |   |-- linux_nvswitch.h
+|   |   |-- nv-acpi.c
+|   |   |-- nv-backlight.c
+|   |   |-- nv-bpmp.c
+|   |   |-- nv-caps-imex.c
+|   |   |-- nv-caps-imex.h
+|   |   |-- nv-caps.c
+|   |   |-- nv-clk.c
+|   |   |-- nv-cray.c
+|   |   |-- nv-dma.c
+|   |   |-- nv-dmabuf.c
+|   |   |-- nv-dsi-parse-panel-props.c
+|   |   |-- nv-gpio.c
+|   |   |-- nv-host1x.c
+|   |   |-- nv-i2c.c
+|   |   |-- nv-imp.c
+|   |   |-- nv-ipc-soc.c
+|   |   |-- nv-kernel.o_binary
+|   |   |-- nv-kthread-q.c
+|   |   |-- nv-memdbg.c
+|   |   |-- nv-mmap.c
+|   |   |-- nv-modeset-interface.c
+|   |   |-- nv-msi.c
+|   |   |-- nv-nano-timer.c
+|   |   |-- nv-p2p.c
+|   |   |-- nv-p2p.h
+|   |   |-- nv-pat.c
+|   |   |-- nv-pat.h
+|   |   |-- nv-pci-table.c
+|   |   |-- nv-pci-table.h
+|   |   |-- nv-pci.c
+|   |   |-- nv-platform-pm.c
+|   |   |-- nv-platform.c
+|   |   |-- nv-procfs.c
+|   |   |-- nv-reg.h
+|   |   |-- nv-report-err.c
+|   |   |-- nv-report-err.h
+|   |   |-- nv-rsync.c
+|   |   |-- nv-rsync.h
+|   |   |-- nv-tracepoint.h
+|   |   |-- nv-usermap.c
+|   |   |-- nv-vm.c
+|   |   |-- nv-vtophys.c
+|   |   |-- nv.c
+|   |   |-- nv_gpu_ops.h
+|   |   |-- nv_uvm_interface.c
+|   |   |-- nvidia-sources.Kbuild
+|   |   |-- nvidia.Kbuild
+|   |   |-- nvlink_caps.c
+|   |   |-- nvlink_caps.h
+|   |   |-- nvlink_common.h
+|   |   |-- nvlink_errors.h
+|   |   |-- nvlink_export.h
+|   |   |-- nvlink_linux.c
+|   |   |-- nvlink_linux.h
+|   |   |-- nvlink_os.h
+|   |   |-- nvlink_pci.h
+|   |   |-- nvlink_proto.h
+|   |   |-- nvspdm_cryptlib_extensions.h
+|   |   |-- nvswitch_event.h
+|   |   |-- os-interface.c
+|   |   |-- os-mlock.c
+|   |   |-- os-pci.c
+|   |   |-- os-registry.c
+|   |   |-- os-usermap.c
+|   |   |-- procfs_nvswitch.c
+|   |   `-- rmp2pdefines.h
+|   |-- nvidia-drm
+|   |   |-- nv-kthread-q.c
+|   |   |-- nv-pci-table.c
+|   |   |-- nv-pci-table.h
+|   |   |-- nv_common_utils.h
+|   |   |-- nvidia-dma-resv-helper.h
+|   |   |-- nvidia-drm-conftest.h
+|   |   |-- nvidia-drm-connector.c
+|   |   |-- nvidia-drm-connector.h
+|   |   |-- nvidia-drm-crtc.c
+|   |   |-- nvidia-drm-crtc.h
+|   |   |-- nvidia-drm-drv.c
+|   |   |-- nvidia-drm-drv.h
+|   |   |-- nvidia-drm-encoder.c
+|   |   |-- nvidia-drm-encoder.h
+|   |   |-- nvidia-drm-fb.c
+|   |   |-- nvidia-drm-fb.h
+|   |   |-- nvidia-drm-fence.c
+|   |   |-- nvidia-drm-fence.h
+|   |   |-- nvidia-drm-format.c
+|   |   |-- nvidia-drm-format.h
+|   |   |-- nvidia-drm-gem-dma-buf.c
+|   |   |-- nvidia-drm-gem-dma-buf.h
+|   |   |-- nvidia-drm-gem-nvkms-memory.c
+|   |   |-- nvidia-drm-gem-nvkms-memory.h
+|   |   |-- nvidia-drm-gem-user-memory.c
+|   |   |-- nvidia-drm-gem-user-memory.h
+|   |   |-- nvidia-drm-gem.c
+|   |   |-- nvidia-drm-gem.h
+|   |   |-- nvidia-drm-helper.c
+|   |   |-- nvidia-drm-helper.h
+|   |   |-- nvidia-drm-ioctl.h
+|   |   |-- nvidia-drm-linux.c
+|   |   |-- nvidia-drm-modeset.c
+|   |   |-- nvidia-drm-modeset.h
+|   |   |-- nvidia-drm-os-interface.c
+|   |   |-- nvidia-drm-os-interface.h
+|   |   |-- nvidia-drm-priv.h
+|   |   |-- nvidia-drm-sources.mk
+|   |   |-- nvidia-drm-utils.c
+|   |   |-- nvidia-drm-utils.h
+|   |   |-- nvidia-drm.Kbuild
+|   |   |-- nvidia-drm.c
+|   |   `-- nvidia-drm.h
+|   |-- nvidia-modeset
+|   |   |-- nv-kthread-q.c
+|   |   |-- nv-modeset-kernel.o_binary
+|   |   |-- nvidia-modeset-linux.c
+|   |   |-- nvidia-modeset-os-interface.h
+|   |   |-- nvidia-modeset.Kbuild
+|   |   |-- nvkms-ioctl.h
+|   |   `-- nvkms.h
+|   |-- nvidia-peermem
+|   |   |-- nv-p2p.h
+|   |   |-- nvidia-peermem.Kbuild
+|   |   |-- nvidia-peermem.c
+|   |   `-- peer_mem.h
+|   `-- nvidia-uvm
+|       |-- cla06fsubch.h
+|       |-- cla16f.h
+|       |-- clb069.h
+|       |-- clb06f.h
+|       |-- clb0b5.h
+|       |-- clc06f.h
+|       |-- clc076.h
+|       |-- clc0b5.h
+|       |-- clc1b5.h
+|       |-- clc365.h
+|       |-- clc369.h
+|       |-- clc36f.h
+|       |-- clc3b5.h
+|       |-- clc46f.h
+|       |-- clc56f.h
+|       |-- clc5b5.h
+|       |-- clc6b5.h
+|       |-- clc7b5.h
+|       |-- clc86f.h
+|       |-- clc8b5.h
+|       |-- clc96f.h
+|       |-- clc9b5.h
+|       |-- clca6f.h
+|       |-- clcab5.h
+|       |-- clcba2.h
+|       |-- ctrl2080mc.h
+|       |-- hwref
+|       |-- nv-kthread-q-selftest.c
+|       |-- nv-kthread-q.c
+|       |-- nvCpuUuid.c
+|       |-- nvidia-uvm-sources.Kbuild
+|       |-- nvidia-uvm.Kbuild
+|       |-- nvstatus.c
+|       |-- uvm.c
+|       |-- uvm.h
+|       |-- uvm_ada.c
+|       |-- uvm_ada_fault_buffer.h
+|       |-- uvm_ampere.c
+|       |-- uvm_ampere_ce.c
+|       |-- uvm_ampere_fault_buffer.c
+|       |-- uvm_ampere_fault_buffer.h
+|       |-- uvm_ampere_host.c
+|       |-- uvm_ampere_mmu.c
+|       |-- uvm_api.h
+|       |-- uvm_ats.c
+|       |-- uvm_ats.h
+|       |-- uvm_ats_faults.c
+|       |-- uvm_ats_faults.h
+|       |-- uvm_ats_sva.c
+|       |-- uvm_ats_sva.h
+|       |-- uvm_blackwell.c
+|       |-- uvm_blackwell_fault_buffer.c
+|       |-- uvm_blackwell_fault_buffer.h
+|       |-- uvm_blackwell_host.c
+|       |-- uvm_blackwell_mmu.c
+|       |-- uvm_ce_test.c
+|       |-- uvm_channel.c
+|       |-- uvm_channel.h
+|       |-- uvm_channel_test.c
+|       |-- uvm_common.c
+|       |-- uvm_common.h
+|       |-- uvm_conf_computing.c
+|       |-- uvm_conf_computing.h
+|       |-- uvm_extern_decl.h
+|       |-- uvm_fault_buffer_flush_test.c
+|       |-- uvm_fd_type.c
+|       |-- uvm_fd_type.h
+|       |-- uvm_forward_decl.h
+|       |-- uvm_get_rm_ptes_test.c
+|       |-- uvm_global.c
+|       |-- uvm_global.h
+|       |-- uvm_gpu.c
+|       |-- uvm_gpu.h
+|       |-- uvm_gpu_access_counters.c
+|       |-- uvm_gpu_access_counters.h
+|       |-- uvm_gpu_isr.c
+|       |-- uvm_gpu_isr.h
+|       |-- uvm_gpu_non_replayable_faults.c
+|       |-- uvm_gpu_non_replayable_faults.h
+|       |-- uvm_gpu_replayable_faults.c
+|       |-- uvm_gpu_replayable_faults.h
+|       |-- uvm_gpu_semaphore.c
+|       |-- uvm_gpu_semaphore.h
+|       |-- uvm_gpu_semaphore_test.c
+|       |-- uvm_hal.c
+|       |-- uvm_hal.h
+|       |-- uvm_hal_types.h
+|       |-- uvm_hmm.c
+|       |-- uvm_hmm.h
+|       |-- uvm_hopper.c
+|       |-- uvm_hopper_ce.c
+|       |-- uvm_hopper_fault_buffer.c
+|       |-- uvm_hopper_fault_buffer.h
+|       |-- uvm_hopper_host.c
+|       |-- uvm_hopper_mmu.c
+|       |-- uvm_hopper_sec2.c
+|       |-- uvm_host_test.c
+|       |-- uvm_ioctl.h
+|       |-- uvm_kvmalloc.c
+|       |-- uvm_kvmalloc.h
+|       |-- uvm_kvmalloc_test.c
+|       |-- uvm_linux.c
+|       |-- uvm_linux.h
+|       |-- uvm_linux_ioctl.h
+|       |-- uvm_lock.c
+|       |-- uvm_lock.h
+|       |-- uvm_lock_test.c
+|       |-- uvm_map_external.c
+|       |-- uvm_map_external.h
+|       |-- uvm_maxwell.c
+|       |-- uvm_maxwell_access_counter_buffer.c
+|       |-- uvm_maxwell_ce.c
+|       |-- uvm_maxwell_fault_buffer.c
+|       |-- uvm_maxwell_host.c
+|       |-- uvm_maxwell_mmu.c
+|       |-- uvm_maxwell_sec2.c
+|       |-- uvm_mem.c
+|       |-- uvm_mem.h
+|       |-- uvm_mem_test.c
+|       |-- uvm_migrate.c
+|       |-- uvm_migrate.h
+|       |-- uvm_migrate_pageable.c
+|       |-- uvm_migrate_pageable.h
+|       |-- uvm_mmu.c
+|       |-- uvm_mmu.h
+|       |-- uvm_page_tree_test.c
+|       |-- uvm_pascal.c
+|       |-- uvm_pascal_ce.c
+|       |-- uvm_pascal_fault_buffer.c
+|       |-- uvm_pascal_fault_buffer.h
+|       |-- uvm_pascal_host.c
+|       |-- uvm_pascal_mmu.c
+|       |-- uvm_peer_identity_mappings_test.c
+|       |-- uvm_perf_events.c
+|       |-- uvm_perf_events.h
+|       |-- uvm_perf_events_test.c
+|       |-- uvm_perf_heuristics.c
+|       |-- uvm_perf_heuristics.h
+|       |-- uvm_perf_module.c
+|       |-- uvm_perf_module.h
+|       |-- uvm_perf_module_test.c
+|       |-- uvm_perf_prefetch.c
+|       |-- uvm_perf_prefetch.h
+|       |-- uvm_perf_thrashing.c
+|       |-- uvm_perf_thrashing.h
+|       |-- uvm_perf_utils.c
+|       |-- uvm_perf_utils.h
+|       |-- uvm_perf_utils_test.c
+|       |-- uvm_pmm_gpu.c
+|       |-- uvm_pmm_gpu.h
+|       |-- uvm_pmm_sysmem.c
+|       |-- uvm_pmm_sysmem.h
+|       |-- uvm_pmm_sysmem_test.c
+|       |-- uvm_pmm_test.c
+|       |-- uvm_policy.c
+|       |-- uvm_populate_pageable.c
+|       |-- uvm_populate_pageable.h
+|       |-- uvm_processors.c
+|       |-- uvm_processors.h
+|       |-- uvm_procfs.c
+|       |-- uvm_procfs.h
+|       |-- uvm_pte_batch.c
+|       |-- uvm_pte_batch.h
+|       |-- uvm_push.c
+|       |-- uvm_push.h
+|       |-- uvm_push_macros.h
+|       |-- uvm_push_test.c
+|       |-- uvm_pushbuffer.c
+|       |-- uvm_pushbuffer.h
+|       |-- uvm_range_allocator.c
+|       |-- uvm_range_allocator.h
+|       |-- uvm_range_allocator_test.c
+|       |-- uvm_range_group.c
+|       |-- uvm_range_group.h
+|       |-- uvm_range_group_tree_test.c
+|       |-- uvm_range_tree.c
+|       |-- uvm_range_tree.h
+|       |-- uvm_range_tree_test.c
+|       |-- uvm_rb_tree.c
+|       |-- uvm_rb_tree.h
+|       |-- uvm_rb_tree_test.c
+|       |-- uvm_rm_mem.c
+|       |-- uvm_rm_mem.h
+|       |-- uvm_rm_mem_test.c
+|       |-- uvm_sec2_test.c
+|       |-- uvm_test.c
+|       |-- uvm_test.h
+|       |-- uvm_test_file.c
+|       |-- uvm_test_file.h
+|       |-- uvm_test_ioctl.h
+|       |-- uvm_test_rng.c
+|       |-- uvm_test_rng.h
+|       |-- uvm_thread_context.c
+|       |-- uvm_thread_context.h
+|       |-- uvm_thread_context_test.c
+|       |-- uvm_tlb_batch.c
+|       |-- uvm_tlb_batch.h
+|       |-- uvm_tools.c
+|       |-- uvm_tools.h
+|       |-- uvm_tools_init.h
+|       |-- uvm_tracker.c
+|       |-- uvm_tracker.h
+|       |-- uvm_tracker_test.c
+|       |-- uvm_turing.c
+|       |-- uvm_turing_access_counter_buffer.c
+|       |-- uvm_turing_fault_buffer.c
+|       |-- uvm_turing_fault_buffer.h
+|       |-- uvm_turing_host.c
+|       |-- uvm_turing_mmu.c
+|       |-- uvm_types.h
+|       |-- uvm_unit_test.h
+|       |-- uvm_user_channel.c
+|       |-- uvm_user_channel.h
+|       |-- uvm_va_block.c
+|       |-- uvm_va_block.h
+|       |-- uvm_va_block_test.c
+|       |-- uvm_va_block_types.h
+|       |-- uvm_va_policy.c
+|       |-- uvm_va_policy.h
+|       |-- uvm_va_range.c
+|       |-- uvm_va_range.h
+|       |-- uvm_va_range_device_p2p.c
+|       |-- uvm_va_space.c
+|       |-- uvm_va_space.h
+|       |-- uvm_va_space_mm.c
+|       |-- uvm_va_space_mm.h
+|       |-- uvm_volta.c
+|       |-- uvm_volta_ce.c
+|       |-- uvm_volta_fault_buffer.c
+|       |-- uvm_volta_fault_buffer.h
+|       |-- uvm_volta_host.c
+|       `-- uvm_volta_mmu.c
+`-- mkprecompiled
+
+12 directories, 380 files
 + cd /usr/src/nvidia-580.126.20/kernel
++ tree -L 3 /lib/modules/
+/lib/modules/  [error opening dir]
+
+0 directories, 0 files
 + '[' -f /lib/modules/5.15.0-173-generic/proc/version ']'
 ++ ls -d -1 'precompiled/**'
 + return 0
@@ -116,9 +4221,9 @@ Checking NVIDIA driver packages...
 Updating the package cache...
 + apt-get -qq update
 + _resolve_kernel_version
+++ sed -nE 's/^Version:\s+(([0-9]+\.){2}[0-9]+)[-.]([0-9]+).*/\1-\3/p'
 ++ apt-cache show linux-headers-5.15.0-173-generic
 ++ head -1
-++ sed -nE 's/^Version:\s+(([0-9]+\.){2}[0-9]+)[-.]([0-9]+).*/\1-\3/p'
 + local version=5.15.0-173
 ++ echo 5.15.0-173-generic
 ++ sed 's/[^a-z]*//'
@@ -133,9 +4238,13 @@ Proceeding with Linux kernel version 5.15.0-173-generic
 + return 0
 + _install_prerequisites
 ++ mktemp -d
-+ local tmp_dir=/tmp/tmp.NBP3DQNaOw
-+ trap 'rm -rf /tmp/tmp.NBP3DQNaOw' EXIT
-+ cd /tmp/tmp.NBP3DQNaOw
++ local tmp_dir=/tmp/tmp.622JtiA0f1
++ trap 'rm -rf /tmp/tmp.622JtiA0f1' EXIT
++ cd /tmp/tmp.622JtiA0f1
++ tree -L 2 /tmp/tmp.622JtiA0f1
+/tmp/tmp.622JtiA0f1
+
+0 directories, 0 files
 + rm -rf /lib/modules/5.15.0-173-generic
 + mkdir -p /lib/modules/5.15.0-173-generic/proc
 + echo 'Installing Linux kernel headers...'
@@ -145,6 +4254,28 @@ Installing Linux kernel headers...
 Installing Linux kernel module files...
 + apt-get -qq download linux-image-5.15.0-173-generic
 + dpkg -x linux-image-5.15.0-173-generic_5.15.0-173.183_amd64.deb .
++ tree -L 2 /tmp/tmp.622JtiA0f1
+/tmp/tmp.622JtiA0f1
+|-- boot
+|   |-- System.map-5.15.0-173-generic
+|   |-- config-5.15.0-173-generic
+|   `-- vmlinuz-5.15.0-173-generic
+|-- lib
+|   |-- modprobe.d
+|   `-- modules
+|-- linux-image-5.15.0-173-generic_5.15.0-173.183_amd64.deb
+|-- linux-modules-5.15.0-173-generic_5.15.0-173.183_amd64.deb
+`-- usr
+    |-- lib
+    `-- share
+
+7 directories, 5 files
++ tree -L 3 /lib/modules/5.15.0-173-generic
+/lib/modules/5.15.0-173-generic
+|-- build -> /usr/src/linux-headers-5.15.0-173-generic
+`-- proc
+
+2 directories, 0 files
 + mv lib/modules/5.15.0-173-generic/modules.builtin lib/modules/5.15.0-173-generic/modules.builtin.modinfo lib/modules/5.15.0-173-generic/modules.order /lib/modules/5.15.0-173-generic
 + mv lib/modules/5.15.0-173-generic/kernel /lib/modules/5.15.0-173-generic
 + depmod 5.15.0-173-generic
@@ -154,7 +4285,253 @@ Generating Linux kernel version string...
 + ls -1 boot/vmlinuz-5.15.0-173-generic
 + '[' -z boot/vmlinuz-5.15.0-173-generic ']'
 + mv version /lib/modules/5.15.0-173-generic/proc
-++ rm -rf /tmp/tmp.NBP3DQNaOw
++ tree -L 3 /lib/modules/5.15.0-173-generic
+/lib/modules/5.15.0-173-generic
+|-- build -> /usr/src/linux-headers-5.15.0-173-generic
+|-- kernel
+|   |-- arch
+|   |   `-- x86
+|   |-- crypto
+|   |   |-- 842.ko
+|   |   |-- adiantum.ko
+|   |   |-- aegis128.ko
+|   |   |-- aes_ti.ko
+|   |   |-- af_alg.ko
+|   |   |-- algif_aead.ko
+|   |   |-- algif_hash.ko
+|   |   |-- algif_rng.ko
+|   |   |-- algif_skcipher.ko
+|   |   |-- ansi_cprng.ko
+|   |   |-- asymmetric_keys
+|   |   |-- async_tx
+|   |   |-- authenc.ko
+|   |   |-- authencesn.ko
+|   |   |-- blake2b_generic.ko
+|   |   |-- blowfish_common.ko
+|   |   |-- blowfish_generic.ko
+|   |   |-- camellia_generic.ko
+|   |   |-- cast5_generic.ko
+|   |   |-- cast6_generic.ko
+|   |   |-- cast_common.ko
+|   |   |-- ccm.ko
+|   |   |-- cfb.ko
+|   |   |-- chacha20poly1305.ko
+|   |   |-- chacha_generic.ko
+|   |   |-- cmac.ko
+|   |   |-- crc32_generic.ko
+|   |   |-- cryptd.ko
+|   |   |-- crypto_engine.ko
+|   |   |-- crypto_simd.ko
+|   |   |-- crypto_user.ko
+|   |   |-- curve25519-generic.ko
+|   |   |-- des_generic.ko
+|   |   |-- ecc.ko
+|   |   |-- ecdh_generic.ko
+|   |   |-- ecdsa_generic.ko
+|   |   |-- echainiv.ko
+|   |   |-- ecrdsa_generic.ko
+|   |   |-- essiv.ko
+|   |   |-- fcrypt.ko
+|   |   |-- keywrap.ko
+|   |   |-- lrw.ko
+|   |   |-- lz4.ko
+|   |   |-- lz4hc.ko
+|   |   |-- md4.ko
+|   |   |-- michael_mic.ko
+|   |   |-- nhpoly1305.ko
+|   |   |-- ofb.ko
+|   |   |-- pcbc.ko
+|   |   |-- pcrypt.ko
+|   |   |-- poly1305_generic.ko
+|   |   |-- rmd160.ko
+|   |   |-- serpent_generic.ko
+|   |   |-- sha3_generic.ko
+|   |   |-- sm2_generic.ko
+|   |   |-- sm3_generic.ko
+|   |   |-- sm4_generic.ko
+|   |   |-- streebog_generic.ko
+|   |   |-- tcrypt.ko
+|   |   |-- twofish_common.ko
+|   |   |-- twofish_generic.ko
+|   |   |-- vmac.ko
+|   |   |-- wp512.ko
+|   |   |-- xcbc.ko
+|   |   |-- xor.ko
+|   |   |-- xxhash_generic.ko
+|   |   `-- zstd.ko
+|   |-- drivers
+|   |   |-- acpi
+|   |   |-- ata
+|   |   |-- bcma
+|   |   |-- block
+|   |   |-- bus
+|   |   |-- char
+|   |   |-- crypto
+|   |   |-- dca
+|   |   |-- firmware
+|   |   |-- gpu
+|   |   |-- hid
+|   |   |-- hv
+|   |   |-- i2c
+|   |   |-- infiniband
+|   |   |-- input
+|   |   |-- leds
+|   |   |-- md
+|   |   |-- media
+|   |   |-- message
+|   |   |-- mfd
+|   |   |-- misc
+|   |   |-- net
+|   |   |-- nvme
+|   |   |-- parport
+|   |   |-- pci
+|   |   |-- pcmcia
+|   |   |-- regulator
+|   |   |-- rpmsg
+|   |   |-- scsi
+|   |   |-- ssb
+|   |   |-- target
+|   |   |-- tty
+|   |   |-- uio
+|   |   |-- usb
+|   |   |-- vdpa
+|   |   |-- vfio
+|   |   |-- vhost
+|   |   |-- video
+|   |   |-- virt
+|   |   |-- virtio
+|   |   |-- watchdog
+|   |   `-- xen
+|   |-- fs
+|   |   |-- 9p
+|   |   |-- autofs
+|   |   |-- binfmt_misc.ko
+|   |   |-- btrfs
+|   |   |-- cachefiles
+|   |   |-- ceph
+|   |   |-- cifs
+|   |   |-- dlm
+|   |   |-- erofs
+|   |   |-- fat
+|   |   |-- fscache
+|   |   |-- fuse
+|   |   |-- isofs
+|   |   |-- lockd
+|   |   |-- netfs
+|   |   |-- nfs
+|   |   |-- nfs_common
+|   |   |-- nfsd
+|   |   |-- nls
+|   |   |-- overlayfs
+|   |   |-- shiftfs.ko
+|   |   |-- smbfs_common
+|   |   |-- udf
+|   |   |-- ufs
+|   |   |-- vboxsf
+|   |   `-- xfs
+|   |-- lib
+|   |   |-- 842
+|   |   |-- bch.ko
+|   |   |-- crc-itu-t.ko
+|   |   |-- crc4.ko
+|   |   |-- crc64.ko
+|   |   |-- crc7.ko
+|   |   |-- crc8.ko
+|   |   |-- crypto
+|   |   |-- libcrc32c.ko
+|   |   |-- lru_cache.ko
+|   |   |-- lz4
+|   |   |-- math
+|   |   |-- memory-notifier-error-inject.ko
+|   |   |-- notifier-error-inject.ko
+|   |   |-- objagg.ko
+|   |   |-- parman.ko
+|   |   |-- pm-notifier-error-inject.ko
+|   |   |-- raid6
+|   |   |-- reed_solomon
+|   |   |-- test_blackhole_dev.ko
+|   |   |-- test_bpf.ko
+|   |   |-- ts_bm.ko
+|   |   |-- ts_fsm.ko
+|   |   |-- ts_kmp.ko
+|   |   |-- xz
+|   |   `-- zstd
+|   |-- net
+|   |   |-- 6lowpan
+|   |   |-- 802
+|   |   |-- 8021q
+|   |   |-- 9p
+|   |   |-- appletalk
+|   |   |-- atm
+|   |   |-- ax25
+|   |   |-- bpfilter
+|   |   |-- bridge
+|   |   |-- can
+|   |   |-- ceph
+|   |   |-- core
+|   |   |-- dccp
+|   |   |-- ieee802154
+|   |   |-- ipv4
+|   |   |-- ipv6
+|   |   |-- key
+|   |   |-- lapb
+|   |   |-- llc
+|   |   |-- netfilter
+|   |   |-- netlink
+|   |   |-- netrom
+|   |   |-- nsh
+|   |   |-- openvswitch
+|   |   |-- packet
+|   |   |-- phonet
+|   |   |-- psample
+|   |   |-- rose
+|   |   |-- rxrpc
+|   |   |-- sched
+|   |   |-- sctp
+|   |   |-- sunrpc
+|   |   |-- tipc
+|   |   |-- tls
+|   |   |-- unix
+|   |   |-- vmw_vsock
+|   |   |-- x25
+|   |   `-- xfrm
+|   |-- sound
+|   |   |-- core
+|   |   |-- drivers
+|   |   |-- pci
+|   |   `-- soundcore.ko
+|   |-- ubuntu
+|   |   `-- ubuntu-host
+|   |-- v4l2loopback
+|   |   `-- v4l2loopback.ko
+|   `-- zfs
+|       |-- icp.ko
+|       |-- spl.ko
+|       |-- zavl.ko
+|       |-- zcommon.ko
+|       |-- zfs.ko
+|       |-- zlua.ko
+|       |-- znvpair.ko
+|       |-- zunicode.ko
+|       `-- zzstd.ko
+|-- modules.alias
+|-- modules.alias.bin
+|-- modules.builtin
+|-- modules.builtin.alias.bin
+|-- modules.builtin.bin
+|-- modules.builtin.modinfo
+|-- modules.dep
+|-- modules.dep.bin
+|-- modules.devname
+|-- modules.order
+|-- modules.softdep
+|-- modules.symbols
+|-- modules.symbols.bin
+`-- proc
+    `-- version
+
+132 directories, 110 files
+++ rm -rf /tmp/tmp.622JtiA0f1
 + _create_driver_package
 + local pkg_name=nvidia-modules-5.15.0-173
 + local nvidia_sign_args=
@@ -164,6 +4541,26 @@ Generating Linux kernel version string...
 + echo 'Compiling NVIDIA driver kernel modules...'
 Compiling NVIDIA driver kernel modules...
 + cd /usr/src/nvidia-580.126.20/kernel
++ pwd
+/usr/src/nvidia-580.126.20/kernel
++ tree -L 2 /usr/src/nvidia-580.126.20
+/usr/src/nvidia-580.126.20
+|-- LICENSE
+|-- kernel
+|   |-- Kbuild
+|   |-- Makefile
+|   |-- common
+|   |-- conftest.sh
+|   |-- count-lines.mk
+|   |-- header-presence-tests.mk
+|   |-- nvidia
+|   |-- nvidia-drm
+|   |-- nvidia-modeset
+|   |-- nvidia-peermem
+|   `-- nvidia-uvm
+`-- mkprecompiled
+
+7 directories, 7 files
 + _gpu_direct_rdma_enabled
 + '[' false = true ']'
 + return 1
@@ -174,8 +4571,8 @@ warning: the compiler differs from the one used to build the kernel
   The kernel was built by: gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
   You are using:           gcc (Ubuntu 12.3.0-1ubuntu1~22.04.3) 12.3.0
 Skipping BTF generation for /usr/src/nvidia-580.126.20/kernel/nvidia-peermem.ko due to unavailability of vmlinux
-Skipping BTF generation for /usr/src/nvidia-580.126.20/kernel/nvidia-drm.ko due to unavailability of vmlinux
 Skipping BTF generation for /usr/src/nvidia-580.126.20/kernel/nvidia-modeset.ko due to unavailability of vmlinux
+Skipping BTF generation for /usr/src/nvidia-580.126.20/kernel/nvidia-drm.ko due to unavailability of vmlinux
 Skipping BTF generation for /usr/src/nvidia-580.126.20/kernel/nvidia-uvm.ko due to unavailability of vmlinux
 Skipping BTF generation for /usr/src/nvidia-580.126.20/kernel/nvidia.ko due to unavailability of vmlinux
 + echo 'Relinking NVIDIA driver kernel modules...'
@@ -196,6 +4593,59 @@ Building NVIDIA driver package nvidia-modules-5.15.0-173...
 + echo 'Installing NVIDIA driver kernel modules...'
 Installing NVIDIA driver kernel modules...
 + cd /usr/src/nvidia-580.126.20
++ pwd
+/usr/src/nvidia-580.126.20
++ tree -L 2 /usr/src/nvidia-580.126.20
+/usr/src/nvidia-580.126.20
+|-- LICENSE
+|-- kernel
+|   |-- Kbuild
+|   |-- Makefile
+|   |-- common
+|   |-- conftest.sh
+|   |-- count-lines.mk
+|   |-- header-presence-tests.mk
+|   |-- nv_compiler.h
+|   |-- nvidia
+|   |-- nvidia-drm
+|   |-- nvidia-modeset
+|   |-- nvidia-peermem
+|   |-- nvidia-uvm
+|   `-- precompiled
+`-- mkprecompiled
+
+8 directories, 8 files
++ tree -L 2 /lib/modules/5.15.0-173-generic
+/lib/modules/5.15.0-173-generic
+|-- build -> /usr/src/linux-headers-5.15.0-173-generic
+|-- kernel
+|   |-- arch
+|   |-- crypto
+|   |-- drivers
+|   |-- fs
+|   |-- lib
+|   |-- net
+|   |-- sound
+|   |-- ubuntu
+|   |-- v4l2loopback
+|   `-- zfs
+|-- modules.alias
+|-- modules.alias.bin
+|-- modules.builtin
+|-- modules.builtin.alias.bin
+|-- modules.builtin.bin
+|-- modules.builtin.modinfo
+|-- modules.dep
+|-- modules.dep.bin
+|-- modules.devname
+|-- modules.order
+|-- modules.softdep
+|-- modules.symbols
+|-- modules.symbols.bin
+`-- proc
+    `-- version
+
+13 directories, 14 files
 + '[' -d /lib/modules/5.15.0-173-generic/kernel/drivers/video ']'
 + rm -rf /lib/modules/5.15.0-173-generic/kernel/drivers/video
 + '[' '' = yes ']'
@@ -227,50 +4677,1978 @@ Performing vgpu_kvm check.
 Cleaning kernel module build directory.
 Building kernel modules:
 
+  [                              ]   0%
+  [#                             ]   0%
+  [#                             ]   0%
+  [#                             ]   0%
+  [#                             ]   1%
+  [#                             ]   1%
+  [#                             ]   1%
+  [#                             ]   1%
+  [#                             ]   2%
+  [#                             ]   2%
+  [#                             ]   2%
+  [#                             ]   3%
+  [##                            ]   3%
+  [##                            ]   3%
+  [##                            ]   3%
+  [##                            ]   4%
+  [##                            ]   4%
+  [##                            ]   4%
+  [##                            ]   5%
+  [##                            ]   5%
+  [##                            ]   5%
+  [##                            ]   5%
+  [##                            ]   6%
+  [##                            ]   6%
+  [###                           ]   6%
+  [###                           ]   7%
+  [###                           ]   7%
+  [###                           ]   7%
+  [###                           ]   7%
+  [###                           ]   8%
+  [###                           ]   8%
+  [###                           ]   8%
+  [###                           ]   8%
+  [###                           ]   9%
+  [###                           ]   9%
+  [###                           ]   9%
+  [####                          ]  10%
+  [####                          ]  10%
+  [####                          ]  10%
+  [####                          ]  10%
+  [####                          ]  11%
+  [####                          ]  11%
+  [####                          ]  11%
+  [####                          ]  12%
+  [####                          ]  12%
+  [####                          ]  12%
+  [####                          ]  12%
+  [####                          ]  13%
+  [#####                         ]  13%
+  [#####                         ]  13%
+  [#####                         ]  14%
+  [#####                         ]  14%
+  [#####                         ]  14%
+  [#####                         ]  14%
+  [#####                         ]  15%
+  [#####                         ]  15%
+  [#####                         ]  15%
+  [#####                         ]  16%
+  [#####                         ]  16%
+  [#####                         ]  16%
+  [######                        ]  16%
+  [######                        ]  17%
+  [######                        ]  17%
+  [######                        ]  17%
+  [######                        ]  17%
+  [######                        ]  18%
+  [######                        ]  18%
+  [######                        ]  18%
+  [######                        ]  19%
+  [######                        ]  19%
+  [######                        ]  19%
+  [######                        ]  19%
+  [#######                       ]  20%
+  [#######                       ]  20%
+  [#######                       ]  20%
+  [#######                       ]  21%
+  [#######                       ]  21%
+  [#######                       ]  21%
+  [#######                       ]  21%
+  [#######                       ]  22%
+  [#######                       ]  22%
+  [#######                       ]  22%
+  [#######                       ]  23%
+  [#######                       ]  23%
+  [########                      ]  23%
+  [########                      ]  23%
+  [########                      ]  24%
+  [########                      ]  24%
+  [########                      ]  24%
+  [########                      ]  25%
+  [########                      ]  25%
+  [########                      ]  25%
+  [########                      ]  25%
+  [########                      ]  26%
+  [########                      ]  26%
+  [#########                     ]  26%
+  [#########                     ]  26%
+  [#########                     ]  27%
+  [#########                     ]  27%
+  [#########                     ]  27%
+  [#########                     ]  28%
+  [#########                     ]  28%
+  [#########                     ]  28%
+  [#########                     ]  28%
+  [#########                     ]  29%
+  [#########                     ]  29%
+  [#########                     ]  29%
+  [##########                    ]  30%
+  [##########                    ]  30%
+  [##########                    ]  30%
+  [##########                    ]  30%
+  [##########                    ]  31%
+  [##########                    ]  31%
+  [##########                    ]  31%
+  [##########                    ]  32%
+  [##########                    ]  32%
+  [##########                    ]  32%
+  [##########                    ]  32%
+  [##########                    ]  33%
+  [###########                   ]  33%
+  [###########                   ]  33%
+  [###########                   ]  33%
+  [###########                   ]  34%
+  [###########                   ]  34%
+  [###########                   ]  34%
+  [###########                   ]  35%
+  [###########                   ]  35%
+  [###########                   ]  35%
+  [###########                   ]  35%
+  [###########                   ]  36%
+  [###########                   ]  36%
+  [############                  ]  36%
+  [############                  ]  37%
+  [############                  ]  37%
+  [############                  ]  37%
+  [############                  ]  37%
+  [############                  ]  38%
+  [############                  ]  38%
+  [############                  ]  38%
+  [############                  ]  39%
+  [############                  ]  39%
+  [############                  ]  39%
+  [############                  ]  39%
+  [#############                 ]  40%
+  [#############                 ]  40%
+  [#############                 ]  40%
+  [#############                 ]  41%
+  [#############                 ]  41%
+  [#############                 ]  41%
+  [#############                 ]  41%
+  [#############                 ]  42%
+  [#############                 ]  42%
+  [#############                 ]  42%
+  [#############                 ]  42%
+  [#############                 ]  43%
+  [##############                ]  43%
+  [##############                ]  43%
+  [##############                ]  44%
+  [##############                ]  44%
+  [##############                ]  44%
+  [##############                ]  44%
+  [##############                ]  45%
+  [##############                ]  45%
+  [##############                ]  45%
+  [##############                ]  46%
+  [##############                ]  46%
+  [##############                ]  46%
+  [###############               ]  46%
+  [###############               ]  47%
+  [###############               ]  47%
+  [###############               ]  47%
+  [###############               ]  48%
+  [###############               ]  48%
+  [###############               ]  48%
+  [###############               ]  48%
+  [###############               ]  49%
+  [###############               ]  49%
+  [###############               ]  49%
+  [###############               ]  50%
+  [################              ]  50%
+  [################              ]  50%
+  [################              ]  50%
+  [################              ]  51%
+  [################              ]  51%
+  [################              ]  51%
+  [################              ]  51%
+  [################              ]  52%
+  [################              ]  52%
+  [################              ]  52%
+  [################              ]  53%
+  [#################             ]  53%
+  [#################             ]  53%
+  [#################             ]  53%
+  [#################             ]  54%
+  [#################             ]  54%
+  [#################             ]  54%
+  [#################             ]  55%
+  [#################             ]  55%
+  [#################             ]  55%
+  [#################             ]  55%
+  [#################             ]  56%
+  [#################             ]  56%
+  [##################            ]  56%
+  [##################            ]  57%
+  [##################            ]  57%
+  [##################            ]  57%
+  [##################            ]  57%
+  [##################            ]  58%
+  [##################            ]  58%
+  [##################            ]  58%
+  [##################            ]  58%
+  [##################            ]  59%
+  [##################            ]  59%
+  [##################            ]  59%
+  [###################           ]  60%
+  [###################           ]  60%
+  [###################           ]  60%
+  [###################           ]  60%
+  [###################           ]  61%
+  [###################           ]  61%
+  [###################           ]  61%
+  [###################           ]  62%
+  [###################           ]  62%
+  [###################           ]  62%
+  [###################           ]  62%
+  [###################           ]  63%
+  [####################          ]  63%
+  [####################          ]  63%
+  [####################          ]  64%
+  [####################          ]  64%
+  [####################          ]  64%
+  [####################          ]  64%
+  [####################          ]  65%
+  [####################          ]  65%
+  [####################          ]  65%
+  [####################          ]  66%
+  [####################          ]  66%
+  [####################          ]  66%
+  [#####################         ]  66%
+  [#####################         ]  67%
+  [#####################         ]  67%
+  [#####################         ]  67%
+  [#####################         ]  67%
+  [#####################         ]  68%
+  [#####################         ]  68%
+  [#####################         ]  68%
+  [#####################         ]  69%
+  [#####################         ]  69%
+  [#####################         ]  69%
+  [#####################         ]  69%
+  [######################        ]  70%
+  [######################        ]  70%
+  [######################        ]  70%
+  [######################        ]  71%
+  [######################        ]  71%
+  [######################        ]  71%
+  [######################        ]  71%
+  [######################        ]  72%
+  [######################        ]  72%
+  [######################        ]  72%
+  [######################        ]  73%
+  [######################        ]  73%
+  [#######################       ]  73%
+  [#######################       ]  73%
+  [#######################       ]  74%
+  [#######################       ]  74%
+  [#######################       ]  74%
+  [#######################       ]  75%
+  [#######################       ]  75%
+  [#######################       ]  75%
+  [#######################       ]  75%
+  [#######################       ]  76%
+  [#######################       ]  76%
+  [########################      ]  76%
+  [########################      ]  76%
+  [########################      ]  77%
+  [########################      ]  77%
+  [########################      ]  77%
+  [########################      ]  78%
+  [########################      ]  78%
+  [########################      ]  78%
+  [########################      ]  78%
+  [########################      ]  79%
+  [########################      ]  79%
+  [########################      ]  79%
+  [#########################     ]  80%
+  [#########################     ]  80%
+  [#########################     ]  80%
+  [#########################     ]  80%
+  [#########################     ]  81%
+  [#########################     ]  81%
+  [#########################     ]  81%
+  [#########################     ]  82%
+  [#########################     ]  82%
+  [#########################     ]  82%
+  [#########################     ]  82%
+  [#########################     ]  83%
+  [##########################    ]  83%
+  [##########################    ]  83%
+  [##########################    ]  83%
+  [##########################    ]  84%
+  [##########################    ]  84%
+  [##########################    ]  84%
+  [##########################    ]  85%
+  [##########################    ]  85%
+  [##########################    ]  85%
+  [##########################    ]  85%
+  [##########################    ]  86%
+  [##########################    ]  86%
+  [###########################   ]  86%
+  [###########################   ]  87%
+  [###########################   ]  87%
+  [###########################   ]  87%
+  [###########################   ]  87%
+  [###########################   ]  88%
+  [###########################   ]  88%
+  [###########################   ]  88%
+  [###########################   ]  89%
+  [###########################   ]  89%
+  [###########################   ]  89%
+  [###########################   ]  89%
+  [############################  ]  90%
+  [############################  ]  90%
+  [############################  ]  90%
+  [############################  ]  91%
+  [############################  ]  91%
+  [############################  ]  91%
+  [############################  ]  91%
+  [############################  ]  92%
+  [############################  ]  92%
+  [############################  ]  92%
+  [############################  ]  92%
+  [############################  ]  93%
+  [############################# ]  93%
+  [############################# ]  93%
+  [############################# ]  94%
+  [############################# ]  94%
+  [############################# ]  94%
+  [############################# ]  94%
+  [############################# ]  95%
+  [############################# ]  95%
+  [############################# ]  95%
+  [############################# ]  96%
+  [############################# ]  96%
+  [############################# ]  96%
+  [##############################]  96%
+  [##############################]  97%
+  [##############################]  97%
+  [##############################]  97%
+  [##############################]  98%
+  [##############################]  98%
+  [##############################]  98%
+  [##############################]  98%
+  [##############################]  99%
+  [##############################]  99%
   [##############################] 100%
 Kernel module compilation complete.
 Unable to determine if Secure Boot is enabled: No such file or directory
 Kernel messages:
-[ 1044.075908] drm_kms_helper: Unknown symbol cec_s_phys_addr (err -2)
-[ 1044.075952] drm_kms_helper: Unknown symbol cec_s_conn_info (err -2)
-[ 1044.076015] drm_kms_helper: Unknown symbol cec_s_phys_addr_from_edid (err -2)
-[ 1044.076348] drm_kms_helper: Unknown symbol fb_sys_write (err -2)
-[ 1044.076430] drm_kms_helper: Unknown symbol sys_imageblit (err -2)
-[ 1044.076510] drm_kms_helper: Unknown symbol sys_fillrect (err -2)
-[ 1044.077022] drm_kms_helper: Unknown symbol cec_unregister_adapter (err -2)
-[ 1044.077271] drm_kms_helper: Unknown symbol cec_allocate_adapter (err -2)
-[ 1044.077318] drm_kms_helper: Unknown symbol sys_copyarea (err -2)
-[ 1044.077484] drm_kms_helper: Unknown symbol fb_sys_read (err -2)
-[ 1044.077599] drm_kms_helper: Unknown symbol cec_fill_conn_info_from_drm (err -2)
-[ 1044.077654] drm_kms_helper: Unknown symbol cec_received_msg_ts (err -2)
-[ 1044.077804] drm_kms_helper: Unknown symbol cec_register_adapter (err -2)
-[ 1044.759142] nvidia: loading out-of-tree module taints kernel.
-[ 1044.759161] nvidia: module license 'NVIDIA' taints kernel.
-[ 1044.759163] Disabling lock debugging due to kernel taint
-[ 1044.800341] nvidia: module verification failed: signature and/or required key missing - tainting kernel
-[ 1044.844799] nvidia-nvlink: Nvlink Core is being initialized, major device number 237
+[  407.679612] drm_kms_helper: Unknown symbol cec_s_phys_addr (err -2)
+[  407.679632] drm_kms_helper: Unknown symbol cec_s_conn_info (err -2)
+[  407.679662] drm_kms_helper: Unknown symbol cec_s_phys_addr_from_edid (err -2)
+[  407.679814] drm_kms_helper: Unknown symbol fb_sys_write (err -2)
+[  407.679852] drm_kms_helper: Unknown symbol sys_imageblit (err -2)
+[  407.679888] drm_kms_helper: Unknown symbol sys_fillrect (err -2)
+[  407.680128] drm_kms_helper: Unknown symbol cec_unregister_adapter (err -2)
+[  407.680248] drm_kms_helper: Unknown symbol cec_allocate_adapter (err -2)
+[  407.680270] drm_kms_helper: Unknown symbol sys_copyarea (err -2)
+[  407.680350] drm_kms_helper: Unknown symbol fb_sys_read (err -2)
+[  407.680406] drm_kms_helper: Unknown symbol cec_fill_conn_info_from_drm (err -2)
+[  407.680434] drm_kms_helper: Unknown symbol cec_received_msg_ts (err -2)
+[  407.680509] drm_kms_helper: Unknown symbol cec_register_adapter (err -2)
+[  407.925957] nvidia: loading out-of-tree module taints kernel.
+[  407.925977] nvidia: module license 'NVIDIA' taints kernel.
+[  407.925979] Disabling lock debugging due to kernel taint
+[  407.968913] nvidia: module verification failed: signature and/or required key missing - tainting kernel
+[  407.998945] nvidia-nvlink: Nvlink Core is being initialized, major device number 237
 
-[ 1044.858170] ACPI: \_SB_.LNKB: Enabled at IRQ 11
-[ 1044.957708] NVRM: loading NVIDIA UNIX x86_64 Kernel Module  580.126.20  Wed Feb 18 05:56:34 UTC 2026
-[ 1044.996190] nvidia_uvm: module uses symbols from proprietary module nvidia, inheriting taint.
-[ 1045.155969] nvidia-modeset: Loading NVIDIA Kernel Mode Setting Driver for UNIX platforms  580.126.20  Wed Feb 18 05:23:12 UTC 2026
-[ 1045.165486] nvidia-modeset: Unloading
-[ 1045.348831] nvidia-nvlink: Unregistered Nvlink Core, major device number 237
+[  408.016409] ACPI: \_SB_.LNKB: Enabled at IRQ 11
+[  408.113626] NVRM: loading NVIDIA UNIX x86_64 Kernel Module  580.126.20  Wed Feb 18 05:56:34 UTC 2026
+[  408.150403] nvidia_uvm: module uses symbols from proprietary module nvidia, inheriting taint.
+[  408.268571] nvidia-modeset: Loading NVIDIA Kernel Mode Setting Driver for UNIX platforms  580.126.20  Wed Feb 18 05:23:12 UTC 2026
+[  408.274940] nvidia-modeset: Unloading
+[  408.455660] nvidia-nvlink: Unregistered Nvlink Core, major device number 237
 Installing 'NVIDIA Accelerated Graphics Driver for Linux-x86_64' (580.126.20):: Installing
 
   [                              ]   0%
 Unable to determine whether NVIDIA kernel modules are present in the initramfs. Existing NVIDIA kernel modules in the initramfs, if any, may interfere with the newly installed driver.
 
+
+  [#                             ]   0%
+  [#                             ]   0%
+  [#                             ]   0%
+  [#                             ]   0%
+  [#                             ]   1%
+  [#                             ]   1%
+  [#                             ]   1%
+  [#                             ]   1%
+  [#                             ]   1%
+  [#                             ]   2%
+  [#                             ]   2%
+  [#                             ]   2%
+  [#                             ]   2%
+  [#                             ]   2%
+  [#                             ]   3%
+  [##                            ]   3%
+  [##                            ]   3%
+  [##                            ]   3%
+  [##                            ]   3%
+  [##                            ]   4%
+  [##                            ]   4%
+  [##                            ]   4%
+  [##                            ]   4%
+  [##                            ]   5%
+  [##                            ]   5%
+  [##                            ]   5%
+  [##                            ]   5%
+  [##                            ]   5%
+  [##                            ]   6%
+  [##                            ]   6%
+  [##                            ]   6%
+  [###                           ]   6%
+  [###                           ]   6%
+  [###                           ]   7%
+  [###                           ]   7%
+  [###                           ]   7%
+  [###                           ]   7%
+  [###                           ]   7%
+  [###                           ]   8%
+  [###                           ]   8%
+  [###                           ]   8%
+  [###                           ]   8%
+  [###                           ]   9%
+  [###                           ]   9%
+  [###                           ]   9%
+  [###                           ]   9%
+  [###                           ]   9%
+  [####                          ]  10%
+  [####                          ]  10%
+  [####                          ]  10%
+  [####                          ]  10%
+  [####                          ]  10%
+  [####                          ]  11%
+  [####                          ]  11%
+  [####                          ]  11%
+  [####                          ]  11%
+  [####                          ]  11%
+  [####                          ]  12%
+  [####                          ]  12%
+  [####                          ]  12%
+  [####                          ]  12%
+  [####                          ]  13%
+  [####                          ]  13%
+  [#####                         ]  13%
+  [#####                         ]  13%
+  [#####                         ]  13%
+  [#####                         ]  14%
+  [#####                         ]  14%
+  [#####                         ]  14%
+  [#####                         ]  14%
+  [#####                         ]  14%
+  [#####                         ]  15%
+  [#####                         ]  15%
+  [#####                         ]  15%
+  [#####                         ]  15%
+  [#####                         ]  15%
+  [#####                         ]  16%
+  [#####                         ]  16%
+  [#####                         ]  16%
+  [######                        ]  16%
+  [######                        ]  17%
+  [######                        ]  17%
+  [######                        ]  17%
+  [######                        ]  17%
+  [######                        ]  17%
+  [######                        ]  18%
+  [######                        ]  18%
+  [######                        ]  18%
+  [######                        ]  18%
+  [######                        ]  18%
+  [######                        ]  19%
+  [######                        ]  19%
+  [######                        ]  19%
+  [######                        ]  19%
+  [######                        ]  19%
+  [#######                       ]  20%
+  [#######                       ]  20%
+  [#######                       ]  20%
+  [#######                       ]  20%
+  [#######                       ]  21%
+  [#######                       ]  21%
+  [#######                       ]  21%
+  [#######                       ]  21%
+  [#######                       ]  21%
+  [#######                       ]  22%
+  [#######                       ]  22%
+  [#######                       ]  22%
+  [#######                       ]  22%
+  [#######                       ]  22%
+  [#######                       ]  23%
+  [#######                       ]  23%
+  [########                      ]  23%
+  [########                      ]  23%
+  [########                      ]  23%
+  [########                      ]  24%
+  [########                      ]  24%
+  [########                      ]  24%
+  [########                      ]  24%
+  [########                      ]  25%
+  [########                      ]  25%
+  [########                      ]  25%
+  [########                      ]  25%
+  [########                      ]  25%
+  [########                      ]  26%
+  [########                      ]  26%
+  [########                      ]  26%
+  [#########                     ]  26%
+  [#########                     ]  26%
+  [#########                     ]  27%
+  [#########                     ]  27%
+  [#########                     ]  27%
+  [#########                     ]  27%
+  [#########                     ]  27%
+  [#########                     ]  28%
+  [#########                     ]  28%
+  [#########                     ]  28%
+  [#########                     ]  28%
+  [#########                     ]  28%
+  [#########                     ]  29%
+  [#########                     ]  29%
+  [#########                     ]  29%
+  [#########                     ]  29%
+  [##########                    ]  30%
+  [##########                    ]  30%
+  [##########                    ]  30%
+  [##########                    ]  30%
+  [##########                    ]  30%
+  [##########                    ]  31%
+  [##########                    ]  31%
+  [##########                    ]  31%
+  [##########                    ]  31%
+  [##########                    ]  31%
+  [##########                    ]  32%
+  [##########                    ]  32%
+  [##########                    ]  32%
+  [##########                    ]  32%
+  [##########                    ]  32%
+  [##########                    ]  33%
+  [###########                   ]  33%
+  [###########                   ]  33%
+  [###########                   ]  33%
+  [###########                   ]  34%
+  [###########                   ]  34%
+  [###########                   ]  34%
+  [###########                   ]  34%
+  [###########                   ]  34%
+  [###########                   ]  35%
+  [###########                   ]  35%
+  [###########                   ]  35%
+  [###########                   ]  35%
+  [###########                   ]  35%
+  [###########                   ]  36%
+  [###########                   ]  36%
+  [###########                   ]  36%
+  [############                  ]  36%
+  [############                  ]  36%
+  [############                  ]  37%
+  [############                  ]  37%
+  [############                  ]  37%
+  [############                  ]  37%
+  [############                  ]  38%
+  [############                  ]  38%
+  [############                  ]  38%
+  [############                  ]  38%
+  [############                  ]  38%
+  [############                  ]  39%
+  [############                  ]  39%
+  [############                  ]  39%
+  [############                  ]  39%
+  [############                  ]  39%
+  [#############                 ]  40%
+  [#############                 ]  40%
+  [#############                 ]  40%
+  [#############                 ]  40%
+  [#############                 ]  40%
+  [#############                 ]  41%
+  [#############                 ]  41%
+  [#############                 ]  41%
+  [#############                 ]  41%
+  [#############                 ]  42%
+  [#############                 ]  42%
+  [#############                 ]  42%
+  [#############                 ]  42%
+  [#############                 ]  42%
+  [#############                 ]  43%
+  [#############                 ]  43%
+  [##############                ]  43%
+  [##############                ]  43%
+  [##############                ]  43%
+  [##############                ]  44%
+  [##############                ]  44%
+  [##############                ]  44%
+  [##############                ]  44%
+  [##############                ]  44%
+  [##############                ]  45%
+  [##############                ]  45%
+  [##############                ]  45%
+  [##############                ]  45%
+  [##############                ]  46%
+  [##############                ]  46%
+  [##############                ]  46%
+  [##############                ]  46%
+  [###############               ]  46%
+  [###############               ]  47%
+  [###############               ]  47%
+  [###############               ]  47%
+  [###############               ]  47%
+  [###############               ]  47%
+  [###############               ]  48%
+  [###############               ]  48%
+  [###############               ]  48%
+  [###############               ]  48%
+  [###############               ]  48%
+  [###############               ]  49%
+  [###############               ]  49%
+  [###############               ]  49%
+  [###############               ]  49%
+  [###############               ]  50%
+  [################              ]  50%
+  [################              ]  50%
+  [################              ]  50%
+  [################              ]  50%
+  [################              ]  51%
+  [################              ]  51%
+  [################              ]  51%
+  [################              ]  51%
+  [################              ]  51%
+  [################              ]  52%
+  [################              ]  52%
+  [################              ]  52%
+  [################              ]  52%
+  [################              ]  52%
+  [################              ]  53%
+  [#################             ]  53%
+  [#################             ]  53%
+  [#################             ]  53%
+  [#################             ]  53%
+  [#################             ]  54%
+  [#################             ]  54%
+  [#################             ]  54%
+  [#################             ]  54%
+  [#################             ]  55%
+  [#################             ]  55%
+  [#################             ]  55%
+  [#################             ]  55%
+  [#################             ]  55%
+  [#################             ]  56%
+  [#################             ]  56%
+  [#################             ]  56%
+  [##################            ]  56%
+  [##################            ]  56%
+  [##################            ]  57%
+  [##################            ]  57%
+  [##################            ]  57%
+  [##################            ]  57%
+  [##################            ]  57%
+  [##################            ]  58%
+  [##################            ]  58%
+  [##################            ]  58%
+  [##################            ]  58%
+  [##################            ]  59%
+  [##################            ]  59%
+  [##################            ]  59%
+  [##################            ]  59%
+  [##################            ]  59%
+  [###################           ]  60%
+  [###################           ]  60%
+  [###################           ]  60%
+  [###################           ]  60%
+  [###################           ]  60%
+  [###################           ]  61%
+  [###################           ]  61%
+  [###################           ]  61%
+  [###################           ]  61%
+  [###################           ]  61%
+  [###################           ]  62%
+  [###################           ]  62%
+  [###################           ]  62%
+  [###################           ]  62%
+  [###################           ]  63%
+  [###################           ]  63%
+  [####################          ]  63%
+  [####################          ]  63%
+  [####################          ]  63%
+  [####################          ]  64%
+  [####################          ]  64%
+  [####################          ]  64%
+  [####################          ]  64%
+  [####################          ]  64%
+  [####################          ]  65%
+  [####################          ]  65%
+  [####################          ]  65%
+  [####################          ]  65%
+  [####################          ]  65%
+  [####################          ]  66%
+  [####################          ]  66%
+  [####################          ]  66%
+  [#####################         ]  66%
+  [#####################         ]  67%
+  [#####################         ]  67%
+  [#####################         ]  67%
+  [#####################         ]  67%
+  [#####################         ]  67%
+  [#####################         ]  68%
+  [#####################         ]  68%
+  [#####################         ]  68%
+  [#####################         ]  68%
+  [#####################         ]  68%
+  [#####################         ]  69%
+  [#####################         ]  69%
+  [#####################         ]  69%
+  [#####################         ]  69%
+  [#####################         ]  69%
+  [######################        ]  70%
+  [######################        ]  70%
+  [######################        ]  70%
+  [######################        ]  70%
+  [######################        ]  71%
+  [######################        ]  71%
+  [######################        ]  71%
+  [######################        ]  71%
+  [######################        ]  71%
+  [######################        ]  72%
+  [######################        ]  72%
+  [######################        ]  72%
+  [######################        ]  72%
+  [######################        ]  72%
+  [######################        ]  73%
+  [######################        ]  73%
+  [#######################       ]  73%
+  [#######################       ]  73%
+  [#######################       ]  73%
+  [#######################       ]  74%
+  [#######################       ]  74%
+  [#######################       ]  74%
+  [#######################       ]  74%
+  [#######################       ]  75%
+  [#######################       ]  75%
+  [#######################       ]  75%
+  [#######################       ]  75%
+  [#######################       ]  75%
+  [#######################       ]  76%
+  [#######################       ]  76%
+  [#######################       ]  76%
+  [########################      ]  76%
+  [########################      ]  76%
+  [########################      ]  77%
+  [########################      ]  77%
+  [########################      ]  77%
+  [########################      ]  77%
+  [########################      ]  77%
+  [########################      ]  78%
+  [########################      ]  78%
+  [########################      ]  78%
+  [########################      ]  78%
+  [########################      ]  78%
+  [########################      ]  79%
+  [########################      ]  79%
+  [########################      ]  79%
+  [########################      ]  79%
+  [#########################     ]  80%
+  [#########################     ]  80%
+  [#########################     ]  80%
+  [#########################     ]  80%
+  [#########################     ]  80%
+  [#########################     ]  81%
+  [#########################     ]  81%
+  [#########################     ]  81%
+  [#########################     ]  81%
+  [#########################     ]  81%
+  [#########################     ]  82%
+  [#########################     ]  82%
+  [#########################     ]  82%
+  [#########################     ]  82%
+  [#########################     ]  82%
+  [#########################     ]  83%
+  [##########################    ]  83%
+  [##########################    ]  83%
+  [##########################    ]  83%
+  [##########################    ]  84%
+  [##########################    ]  84%
+  [##########################    ]  84%
+  [##########################    ]  84%
+  [##########################    ]  84%
+  [##########################    ]  85%
+  [##########################    ]  85%
+  [##########################    ]  85%
+  [##########################    ]  85%
+  [##########################    ]  85%
+  [##########################    ]  86%
+  [##########################    ]  86%
+  [##########################    ]  86%
+  [###########################   ]  86%
+  [###########################   ]  86%
+  [###########################   ]  87%
+  [###########################   ]  87%
+  [###########################   ]  87%
+  [###########################   ]  87%
+  [###########################   ]  88%
+  [###########################   ]  88%
+  [###########################   ]  88%
+  [###########################   ]  88%
+  [###########################   ]  88%
+  [###########################   ]  89%
+  [###########################   ]  89%
+  [###########################   ]  89%
+  [###########################   ]  89%
+  [###########################   ]  89%
+  [############################  ]  90%
+  [############################  ]  90%
+  [############################  ]  90%
+  [############################  ]  90%
+  [############################  ]  90%
+  [############################  ]  91%
+  [############################  ]  91%
+  [############################  ]  91%
+  [############################  ]  91%
+  [############################  ]  92%
+  [############################  ]  92%
+  [############################  ]  92%
+  [############################  ]  92%
+  [############################  ]  92%
+  [############################  ]  93%
+  [############################  ]  93%
+  [############################# ]  93%
+  [############################# ]  93%
+  [############################# ]  93%
+  [############################# ]  94%
+  [############################# ]  94%
+  [############################# ]  94%
+  [############################# ]  94%
+  [############################# ]  94%
+  [############################# ]  95%
+  [############################# ]  95%
+  [############################# ]  95%
+  [############################# ]  95%
+  [############################# ]  96%
+  [############################# ]  96%
+  [############################# ]  96%
+  [############################# ]  96%
+  [##############################]  96%
+  [##############################]  97%
+  [##############################]  97%
+  [##############################]  97%
+  [##############################]  97%
+  [##############################]  97%
+  [##############################]  98%
+  [##############################]  98%
+  [##############################]  98%
+  [##############################]  98%
+  [##############################]  98%
+  [##############################]  99%
+  [##############################]  99%
+  [##############################]  99%
+  [                         #    ]     
+  [                          #   ]     
+  [                           #  ]     
+  [                            # ]     
   [##############################] 100%
 Driver file installation is complete.
+Running post-install sanity check:: Checking
+
+  [                              ]   0%
+  [#                             ]   0%
+  [#                             ]   0%
+  [#                             ]   0%
+  [#                             ]   0%
+  [#                             ]   0%
+  [#                             ]   0%
+  [#                             ]   0%
+  [#                             ]   0%
+  [#                             ]   0%
+  [#                             ]   1%
+  [#                             ]   1%
+  [#                             ]   1%
+  [#                             ]   1%
+  [#                             ]   1%
+  [#                             ]   1%
+  [#                             ]   1%
+  [#                             ]   1%
+  [#                             ]   1%
+  [#                             ]   2%
+  [#                             ]   2%
+  [#                             ]   2%
+  [#                             ]   2%
+  [#                             ]   2%
+  [#                             ]   2%
+  [#                             ]   2%
+  [#                             ]   2%
+  [#                             ]   2%
+  [#                             ]   2%
+  [#                             ]   3%
+  [#                             ]   3%
+  [#                             ]   3%
+  [##                            ]   3%
+  [##                            ]   3%
+  [##                            ]   3%
+  [##                            ]   3%
+  [##                            ]   3%
+  [##                            ]   3%
+  [##                            ]   4%
+  [##                            ]   4%
+  [##                            ]   4%
+  [##                            ]   4%
+  [##                            ]   4%
+  [##                            ]   4%
+  [##                            ]   4%
+  [##                            ]   4%
+  [##                            ]   4%
+  [##                            ]   4%
+  [##                            ]   5%
+  [##                            ]   5%
+  [##                            ]   5%
+  [##                            ]   5%
+  [##                            ]   5%
+  [##                            ]   5%
+  [##                            ]   5%
+  [##                            ]   5%
+  [##                            ]   5%
+  [##                            ]   6%
+  [##                            ]   6%
+  [##                            ]   6%
+  [##                            ]   6%
+  [##                            ]   6%
+  [##                            ]   6%
+  [##                            ]   6%
+  [###                           ]   6%
+  [###                           ]   6%
+  [###                           ]   6%
+  [###                           ]   7%
+  [###                           ]   7%
+  [###                           ]   7%
+  [###                           ]   7%
+  [###                           ]   7%
+  [###                           ]   7%
+  [###                           ]   7%
+  [###                           ]   7%
+  [###                           ]   7%
+  [###                           ]   8%
+  [###                           ]   8%
+  [###                           ]   8%
+  [###                           ]   8%
+  [###                           ]   8%
+  [###                           ]   8%
+  [###                           ]   8%
+  [###                           ]   8%
+  [###                           ]   8%
+  [###                           ]   8%
+  [###                           ]   9%
+  [###                           ]   9%
+  [###                           ]   9%
+  [###                           ]   9%
+  [###                           ]   9%
+  [###                           ]   9%
+  [###                           ]   9%
+  [###                           ]   9%
+  [###                           ]   9%
+  [####                          ]  10%
+  [####                          ]  10%
+  [####                          ]  10%
+  [####                          ]  10%
+  [####                          ]  10%
+  [####                          ]  10%
+  [####                          ]  10%
+  [####                          ]  10%
+  [####                          ]  10%
+  [####                          ]  11%
+  [####                          ]  11%
+  [####                          ]  11%
+  [####                          ]  11%
+  [####                          ]  11%
+  [####                          ]  11%
+  [####                          ]  11%
+  [####                          ]  11%
+  [####                          ]  11%
+  [####                          ]  11%
+  [####                          ]  12%
+  [####                          ]  12%
+  [####                          ]  12%
+  [####                          ]  12%
+  [####                          ]  12%
+  [####                          ]  12%
+  [####                          ]  12%
+  [####                          ]  12%
+  [####                          ]  12%
+  [####                          ]  13%
+  [####                          ]  13%
+  [####                          ]  13%
+  [####                          ]  13%
+  [#####                         ]  13%
+  [#####                         ]  13%
+  [#####                         ]  13%
+  [#####                         ]  13%
+  [#####                         ]  13%
+  [#####                         ]  13%
+  [#####                         ]  14%
+  [#####                         ]  14%
+  [#####                         ]  14%
+  [#####                         ]  14%
+  [#####                         ]  14%
+  [#####                         ]  14%
+  [#####                         ]  14%
+  [#####                         ]  14%
+  [#####                         ]  14%
+  [#####                         ]  15%
+  [#####                         ]  15%
+  [#####                         ]  15%
+  [#####                         ]  15%
+  [#####                         ]  15%
+  [#####                         ]  15%
+  [#####                         ]  15%
+  [#####                         ]  15%
+  [#####                         ]  15%
+  [#####                         ]  15%
+  [#####                         ]  16%
+  [#####                         ]  16%
+  [#####                         ]  16%
+  [#####                         ]  16%
+  [#####                         ]  16%
+  [#####                         ]  16%
+  [######                        ]  16%
+  [######                        ]  16%
+  [######                        ]  16%
+  [######                        ]  17%
+  [######                        ]  17%
+  [######                        ]  17%
+  [######                        ]  17%
+  [######                        ]  17%
+  [######                        ]  17%
+  [######                        ]  17%
+  [######                        ]  17%
+  [######                        ]  17%
+  [######                        ]  17%
+  [######                        ]  18%
+  [######                        ]  18%
+  [######                        ]  18%
+  [######                        ]  18%
+  [######                        ]  18%
+  [######                        ]  18%
+  [######                        ]  18%
+  [######                        ]  18%
+  [######                        ]  18%
+  [######                        ]  19%
+  [######                        ]  19%
+  [######                        ]  19%
+  [######                        ]  19%
+  [######                        ]  19%
+  [######                        ]  19%
+  [######                        ]  19%
+  [######                        ]  19%
+  [######                        ]  19%
+  [######                        ]  20%
+  [#######                       ]  20%
+  [#######                       ]  20%
+  [#######                       ]  20%
+  [#######                       ]  20%
+  [#######                       ]  20%
+  [#######                       ]  20%
+  [#######                       ]  20%
+  [#######                       ]  20%
+  [#######                       ]  20%
+  [#######                       ]  21%
+  [#######                       ]  21%
+  [#######                       ]  21%
+  [#######                       ]  21%
+  [#######                       ]  21%
+  [#######                       ]  21%
+  [#######                       ]  21%
+  [#######                       ]  21%
+  [#######                       ]  21%
+  [#######                       ]  22%
+  [#######                       ]  22%
+  [#######                       ]  22%
+  [#######                       ]  22%
+  [#######                       ]  22%
+  [#######                       ]  22%
+  [#######                       ]  22%
+  [#######                       ]  22%
+  [#######                       ]  22%
+  [#######                       ]  22%
+  [#######                       ]  23%
+  [#######                       ]  23%
+  [#######                       ]  23%
+  [########                      ]  23%
+  [########                      ]  23%
+  [########                      ]  23%
+  [########                      ]  23%
+  [########                      ]  23%
+  [########                      ]  23%
+  [########                      ]  24%
+  [########                      ]  24%
+  [########                      ]  24%
+  [########                      ]  24%
+  [########                      ]  24%
+  [########                      ]  24%
+  [########                      ]  24%
+  [########                      ]  24%
+  [########                      ]  24%
+  [########                      ]  24%
+  [########                      ]  25%
+  [########                      ]  25%
+  [########                      ]  25%
+  [########                      ]  25%
+  [########                      ]  25%
+  [########                      ]  25%
+  [########                      ]  25%
+  [########                      ]  25%
+  [########                      ]  25%
+  [########                      ]  26%
+  [########                      ]  26%
+  [########                      ]  26%
+  [########                      ]  26%
+  [########                      ]  26%
+  [########                      ]  26%
+  [########                      ]  26%
+  [#########                     ]  26%
+  [#########                     ]  26%
+  [#########                     ]  26%
+  [#########                     ]  27%
+  [#########                     ]  27%
+  [#########                     ]  27%
+  [#########                     ]  27%
+  [#########                     ]  27%
+  [#########                     ]  27%
+  [#########                     ]  27%
+  [#########                     ]  27%
+  [#########                     ]  27%
+  [#########                     ]  28%
+  [#########                     ]  28%
+  [#########                     ]  28%
+  [#########                     ]  28%
+  [#########                     ]  28%
+  [#########                     ]  28%
+  [#########                     ]  28%
+  [#########                     ]  28%
+  [#########                     ]  28%
+  [#########                     ]  28%
+  [#########                     ]  29%
+  [#########                     ]  29%
+  [#########                     ]  29%
+  [#########                     ]  29%
+  [#########                     ]  29%
+  [#########                     ]  29%
+  [#########                     ]  29%
+  [#########                     ]  29%
+  [#########                     ]  29%
+  [##########                    ]  30%
+  [##########                    ]  30%
+  [##########                    ]  30%
+  [##########                    ]  30%
+  [##########                    ]  30%
+  [##########                    ]  30%
+  [##########                    ]  30%
+  [##########                    ]  30%
+  [##########                    ]  30%
+  [##########                    ]  31%
+  [##########                    ]  31%
+  [##########                    ]  31%
+  [##########                    ]  31%
+  [##########                    ]  31%
+  [##########                    ]  31%
+  [##########                    ]  31%
+  [##########                    ]  31%
+  [##########                    ]  31%
+  [##########                    ]  31%
+  [##########                    ]  32%
+  [##########                    ]  32%
+  [##########                    ]  32%
+  [##########                    ]  32%
+  [##########                    ]  32%
+  [##########                    ]  32%
+  [##########                    ]  32%
+  [##########                    ]  32%
+  [##########                    ]  32%
+  [##########                    ]  33%
+  [##########                    ]  33%
+  [##########                    ]  33%
+  [##########                    ]  33%
+  [###########                   ]  33%
+  [###########                   ]  33%
+  [###########                   ]  33%
+  [###########                   ]  33%
+  [###########                   ]  33%
+  [###########                   ]  33%
+  [###########                   ]  34%
+  [###########                   ]  34%
+  [###########                   ]  34%
+  [###########                   ]  34%
+  [###########                   ]  34%
+  [###########                   ]  34%
+  [###########                   ]  34%
+  [###########                   ]  34%
+  [###########                   ]  34%
+  [###########                   ]  35%
+  [###########                   ]  35%
+  [###########                   ]  35%
+  [###########                   ]  35%
+  [###########                   ]  35%
+  [###########                   ]  35%
+  [###########                   ]  35%
+  [###########                   ]  35%
+  [###########                   ]  35%
+  [###########                   ]  35%
+  [###########                   ]  36%
+  [###########                   ]  36%
+  [###########                   ]  36%
+  [###########                   ]  36%
+  [###########                   ]  36%
+  [###########                   ]  36%
+  [############                  ]  36%
+  [############                  ]  36%
+  [############                  ]  36%
+  [############                  ]  37%
+  [############                  ]  37%
+  [############                  ]  37%
+  [############                  ]  37%
+  [############                  ]  37%
+  [############                  ]  37%
+  [############                  ]  37%
+  [############                  ]  37%
+  [############                  ]  37%
+  [############                  ]  37%
+  [############                  ]  38%
+  [############                  ]  38%
+  [############                  ]  38%
+  [############                  ]  38%
+  [############                  ]  38%
+  [############                  ]  38%
+  [############                  ]  38%
+  [############                  ]  38%
+  [############                  ]  38%
+  [############                  ]  39%
+  [############                  ]  39%
+  [############                  ]  39%
+  [############                  ]  39%
+  [############                  ]  39%
+  [############                  ]  39%
+  [############                  ]  39%
+  [############                  ]  39%
+  [############                  ]  39%
+  [############                  ]  40%
+  [#############                 ]  40%
+  [#############                 ]  40%
+  [#############                 ]  40%
+  [#############                 ]  40%
+  [#############                 ]  40%
+  [#############                 ]  40%
+  [#############                 ]  40%
+  [#############                 ]  40%
+  [#############                 ]  40%
+  [#############                 ]  41%
+  [#############                 ]  41%
+  [#############                 ]  41%
+  [#############                 ]  41%
+  [#############                 ]  41%
+  [#############                 ]  41%
+  [#############                 ]  41%
+  [#############                 ]  41%
+  [#############                 ]  41%
+  [#############                 ]  42%
+  [#############                 ]  42%
+  [#############                 ]  42%
+  [#############                 ]  42%
+  [#############                 ]  42%
+  [#############                 ]  42%
+  [#############                 ]  42%
+  [#############                 ]  42%
+  [#############                 ]  42%
+  [#############                 ]  42%
+  [#############                 ]  43%
+  [#############                 ]  43%
+  [#############                 ]  43%
+  [##############                ]  43%
+  [##############                ]  43%
+  [##############                ]  43%
+  [##############                ]  43%
+  [##############                ]  43%
+  [##############                ]  43%
+  [##############                ]  44%
+  [##############                ]  44%
+  [##############                ]  44%
+  [##############                ]  44%
+  [##############                ]  44%
+  [##############                ]  44%
+  [##############                ]  44%
+  [##############                ]  44%
+  [##############                ]  44%
+  [##############                ]  44%
+  [##############                ]  45%
+  [##############                ]  45%
+  [##############                ]  45%
+  [##############                ]  45%
+  [##############                ]  45%
+  [##############                ]  45%
+  [##############                ]  45%
+  [##############                ]  45%
+  [##############                ]  45%
+  [##############                ]  46%
+  [##############                ]  46%
+  [##############                ]  46%
+  [##############                ]  46%
+  [##############                ]  46%
+  [##############                ]  46%
+  [##############                ]  46%
+  [###############               ]  46%
+  [###############               ]  46%
+  [###############               ]  46%
+  [###############               ]  47%
+  [###############               ]  47%
+  [###############               ]  47%
+  [###############               ]  47%
+  [###############               ]  47%
+  [###############               ]  47%
+  [###############               ]  47%
+  [###############               ]  47%
+  [###############               ]  47%
+  [###############               ]  48%
+  [###############               ]  48%
+  [###############               ]  48%
+  [###############               ]  48%
+  [###############               ]  48%
+  [###############               ]  48%
+  [###############               ]  48%
+  [###############               ]  48%
+  [###############               ]  48%
+  [###############               ]  48%
+  [###############               ]  49%
+  [###############               ]  49%
+  [###############               ]  49%
+  [###############               ]  49%
+  [###############               ]  49%
+  [###############               ]  49%
+  [###############               ]  49%
+  [###############               ]  49%
+  [###############               ]  49%
+  [################              ]  50%
+  [################              ]  50%
+  [################              ]  50%
+  [################              ]  50%
+  [################              ]  50%
+  [################              ]  50%
+  [################              ]  50%
+  [################              ]  50%
+  [################              ]  50%
+  [################              ]  51%
+  [################              ]  51%
+  [################              ]  51%
+  [################              ]  51%
+  [################              ]  51%
+  [################              ]  51%
+  [################              ]  51%
+  [################              ]  51%
+  [################              ]  51%
+  [################              ]  51%
+  [################              ]  52%
+  [################              ]  52%
+  [################              ]  52%
+  [################              ]  52%
+  [################              ]  52%
+  [################              ]  52%
+  [################              ]  52%
+  [################              ]  52%
+  [################              ]  52%
+  [################              ]  53%
+  [################              ]  53%
+  [################              ]  53%
+  [################              ]  53%
+  [#################             ]  53%
+  [#################             ]  53%
+  [#################             ]  53%
+  [#################             ]  53%
+  [#################             ]  53%
+  [#################             ]  53%
+  [#################             ]  54%
+  [#################             ]  54%
+  [#################             ]  54%
+  [#################             ]  54%
+  [#################             ]  54%
+  [#################             ]  54%
+  [#################             ]  54%
+  [#################             ]  54%
+  [#################             ]  54%
+  [#################             ]  55%
+  [#################             ]  55%
+  [#################             ]  55%
+  [#################             ]  55%
+  [#################             ]  55%
+  [#################             ]  55%
+  [#################             ]  55%
+  [#################             ]  55%
+  [#################             ]  55%
+  [#################             ]  55%
+  [#################             ]  56%
+  [#################             ]  56%
+  [#################             ]  56%
+  [#################             ]  56%
+  [#################             ]  56%
+  [#################             ]  56%
+  [##################            ]  56%
+  [##################            ]  56%
+  [##################            ]  56%
+  [##################            ]  57%
+  [##################            ]  57%
+  [##################            ]  57%
+  [##################            ]  57%
+  [##################            ]  57%
+  [##################            ]  57%
+  [##################            ]  57%
+  [##################            ]  57%
+  [##################            ]  57%
+  [##################            ]  57%
+  [##################            ]  58%
+  [##################            ]  58%
+  [##################            ]  58%
+  [##################            ]  58%
+  [##################            ]  58%
+  [##################            ]  58%
+  [##################            ]  58%
+  [##################            ]  58%
+  [##################            ]  58%
+  [##################            ]  59%
+  [##################            ]  59%
+  [##################            ]  59%
+  [##################            ]  59%
+  [##################            ]  59%
+  [##################            ]  59%
+  [##################            ]  59%
+  [##################            ]  59%
+  [##################            ]  59%
+  [##################            ]  60%
+  [###################           ]  60%
+  [###################           ]  60%
+  [###################           ]  60%
+  [###################           ]  60%
+  [###################           ]  60%
+  [###################           ]  60%
+  [###################           ]  60%
+  [###################           ]  60%
+  [###################           ]  60%
+  [###################           ]  61%
+  [###################           ]  61%
+  [###################           ]  61%
+  [###################           ]  61%
+  [###################           ]  61%
+  [###################           ]  61%
+  [###################           ]  61%
+  [###################           ]  61%
+  [###################           ]  61%
+  [###################           ]  62%
+  [###################           ]  62%
+  [###################           ]  62%
+  [###################           ]  62%
+  [###################           ]  62%
+  [###################           ]  62%
+  [###################           ]  62%
+  [###################           ]  62%
+  [###################           ]  62%
+  [###################           ]  62%
+  [###################           ]  63%
+  [###################           ]  63%
+  [###################           ]  63%
+  [####################          ]  63%
+  [####################          ]  63%
+  [####################          ]  63%
+  [####################          ]  63%
+  [####################          ]  63%
+  [####################          ]  63%
+  [####################          ]  64%
+  [####################          ]  64%
+  [####################          ]  64%
+  [####################          ]  64%
+  [####################          ]  64%
+  [####################          ]  64%
+  [####################          ]  64%
+  [####################          ]  64%
+  [####################          ]  64%
+  [####################          ]  64%
+  [####################          ]  65%
+  [####################          ]  65%
+  [####################          ]  65%
+  [####################          ]  65%
+  [####################          ]  65%
+  [####################          ]  65%
+  [####################          ]  65%
+  [####################          ]  65%
+  [####################          ]  65%
+  [####################          ]  66%
+  [####################          ]  66%
+  [####################          ]  66%
+  [####################          ]  66%
+  [####################          ]  66%
+  [####################          ]  66%
+  [####################          ]  66%
+  [#####################         ]  66%
+  [#####################         ]  66%
+  [#####################         ]  66%
+  [#####################         ]  67%
+  [#####################         ]  67%
+  [#####################         ]  67%
+  [#####################         ]  67%
+  [#####################         ]  67%
+  [#####################         ]  67%
+  [#####################         ]  67%
+  [#####################         ]  67%
+  [#####################         ]  67%
+  [#####################         ]  68%
+  [#####################         ]  68%
+  [#####################         ]  68%
+  [#####################         ]  68%
+  [#####################         ]  68%
+  [#####################         ]  68%
+  [#####################         ]  68%
+  [#####################         ]  68%
+  [#####################         ]  68%
+  [#####################         ]  68%
+  [#####################         ]  69%
+  [#####################         ]  69%
+  [#####################         ]  69%
+  [#####################         ]  69%
+  [#####################         ]  69%
+  [#####################         ]  69%
+  [#####################         ]  69%
+  [#####################         ]  69%
+  [#####################         ]  69%
+  [######################        ]  70%
+  [######################        ]  70%
+  [######################        ]  70%
+  [######################        ]  70%
+  [######################        ]  70%
+  [######################        ]  70%
+  [######################        ]  70%
+  [######################        ]  70%
+  [######################        ]  70%
+  [######################        ]  71%
+  [######################        ]  71%
+  [######################        ]  71%
+  [######################        ]  71%
+  [######################        ]  71%
+  [######################        ]  71%
+  [######################        ]  71%
+  [######################        ]  71%
+  [######################        ]  71%
+  [######################        ]  71%
+  [######################        ]  72%
+  [######################        ]  72%
+  [######################        ]  72%
+  [######################        ]  72%
+  [######################        ]  72%
+  [######################        ]  72%
+  [######################        ]  72%
+  [######################        ]  72%
+  [######################        ]  72%
+  [######################        ]  73%
+  [######################        ]  73%
+  [######################        ]  73%
+  [######################        ]  73%
+  [#######################       ]  73%
+  [#######################       ]  73%
+  [#######################       ]  73%
+  [#######################       ]  73%
+  [#######################       ]  73%
+  [#######################       ]  73%
+  [#######################       ]  74%
+  [#######################       ]  74%
+  [#######################       ]  74%
+  [#######################       ]  74%
+  [#######################       ]  74%
+  [#######################       ]  74%
+  [#######################       ]  74%
+  [#######################       ]  74%
+  [#######################       ]  74%
+  [#######################       ]  75%
+  [#######################       ]  75%
+  [#######################       ]  75%
+  [#######################       ]  75%
+  [#######################       ]  75%
+  [#######################       ]  75%
+  [#######################       ]  75%
+  [#######################       ]  75%
+  [#######################       ]  75%
+  [#######################       ]  75%
+  [#######################       ]  76%
+  [#######################       ]  76%
+  [#######################       ]  76%
+  [#######################       ]  76%
+  [#######################       ]  76%
+  [#######################       ]  76%
+  [########################      ]  76%
+  [########################      ]  76%
+  [########################      ]  76%
+  [########################      ]  77%
+  [########################      ]  77%
+  [########################      ]  77%
+  [########################      ]  77%
+  [########################      ]  77%
+  [########################      ]  77%
+  [########################      ]  77%
+  [########################      ]  77%
+  [########################      ]  77%
+  [########################      ]  77%
+  [########################      ]  78%
+  [########################      ]  78%
+  [########################      ]  78%
+  [########################      ]  78%
+  [########################      ]  78%
+  [########################      ]  78%
+  [########################      ]  78%
+  [########################      ]  78%
+  [########################      ]  78%
+  [########################      ]  79%
+  [########################      ]  79%
+  [########################      ]  79%
+  [########################      ]  79%
+  [########################      ]  79%
+  [########################      ]  79%
+  [########################      ]  79%
+  [########################      ]  79%
+  [########################      ]  79%
+  [########################      ]  80%
+  [#########################     ]  80%
+  [#########################     ]  80%
+  [#########################     ]  80%
+  [#########################     ]  80%
+  [#########################     ]  80%
+  [#########################     ]  80%
+  [#########################     ]  80%
+  [#########################     ]  80%
+  [#########################     ]  80%
+  [#########################     ]  81%
+  [#########################     ]  81%
+  [#########################     ]  81%
+  [#########################     ]  81%
+  [#########################     ]  81%
+  [#########################     ]  81%
+  [#########################     ]  81%
+  [#########################     ]  81%
+  [#########################     ]  81%
+  [#########################     ]  82%
+  [#########################     ]  82%
+  [#########################     ]  82%
+  [#########################     ]  82%
+  [#########################     ]  82%
+  [#########################     ]  82%
+  [#########################     ]  82%
+  [#########################     ]  82%
+  [#########################     ]  82%
+  [#########################     ]  82%
+  [#########################     ]  83%
+  [#########################     ]  83%
+  [#########################     ]  83%
+  [##########################    ]  83%
+  [##########################    ]  83%
+  [##########################    ]  83%
+  [##########################    ]  83%
+  [##########################    ]  83%
+  [##########################    ]  83%
+  [##########################    ]  84%
+  [##########################    ]  84%
+  [##########################    ]  84%
+  [##########################    ]  84%
+  [##########################    ]  84%
+  [##########################    ]  84%
+  [##########################    ]  84%
+  [##########################    ]  84%
+  [##########################    ]  84%
+  [##########################    ]  84%
+  [##########################    ]  85%
+  [##########################    ]  85%
+  [##########################    ]  85%
+  [##########################    ]  85%
+  [##########################    ]  85%
+  [##########################    ]  85%
+  [##########################    ]  85%
+  [##########################    ]  85%
+  [##########################    ]  85%
+  [##########################    ]  86%
+  [##########################    ]  86%
+  [##########################    ]  86%
+  [##########################    ]  86%
+  [##########################    ]  86%
+  [##########################    ]  86%
+  [##########################    ]  86%
+  [###########################   ]  86%
+  [###########################   ]  86%
+  [###########################   ]  86%
+  [###########################   ]  87%
+  [###########################   ]  87%
+  [###########################   ]  87%
+  [###########################   ]  87%
+  [###########################   ]  87%
+  [###########################   ]  87%
+  [###########################   ]  87%
+  [###########################   ]  87%
+  [###########################   ]  87%
+  [###########################   ]  88%
+  [###########################   ]  88%
+  [###########################   ]  88%
+  [###########################   ]  88%
+  [###########################   ]  88%
+  [###########################   ]  88%
+  [###########################   ]  88%
+  [###########################   ]  88%
+  [###########################   ]  88%
+  [###########################   ]  88%
+  [###########################   ]  89%
+  [###########################   ]  89%
+  [###########################   ]  89%
+  [###########################   ]  89%
+  [###########################   ]  89%
+  [###########################   ]  89%
+  [###########################   ]  89%
+  [###########################   ]  89%
+  [###########################   ]  89%
+  [############################  ]  90%
+  [############################  ]  90%
+  [############################  ]  90%
+  [############################  ]  90%
+  [############################  ]  90%
+  [############################  ]  90%
+  [############################  ]  90%
+  [############################  ]  90%
+  [############################  ]  90%
+  [############################  ]  91%
+  [############################  ]  91%
+  [############################  ]  91%
+  [############################  ]  91%
+  [############################  ]  91%
+  [############################  ]  91%
+  [############################  ]  91%
+  [############################  ]  91%
+  [############################  ]  91%
+  [############################  ]  91%
+  [############################  ]  92%
+  [############################  ]  92%
+  [############################  ]  92%
+  [############################  ]  92%
+  [############################  ]  92%
+  [############################  ]  92%
+  [############################  ]  92%
+  [############################  ]  92%
+  [############################  ]  92%
+  [############################  ]  93%
+  [############################  ]  93%
+  [############################  ]  93%
+  [############################  ]  93%
+  [############################# ]  93%
+  [############################# ]  93%
+  [############################# ]  93%
+  [############################# ]  93%
+  [############################# ]  93%
+  [############################# ]  93%
+  [############################# ]  94%
+  [############################# ]  94%
+  [############################# ]  94%
+  [############################# ]  94%
+  [############################# ]  94%
+  [############################# ]  94%
+  [############################# ]  94%
+  [############################# ]  94%
+  [############################# ]  94%
+  [############################# ]  95%
+  [############################# ]  95%
+  [############################# ]  95%
+  [############################# ]  95%
+  [############################# ]  95%
+  [############################# ]  95%
+  [############################# ]  95%
+  [############################# ]  95%
+  [############################# ]  95%
+  [############################# ]  95%
+  [############################# ]  96%
+  [############################# ]  96%
+  [############################# ]  96%
+  [############################# ]  96%
+  [############################# ]  96%
+  [############################# ]  96%
+  [##############################]  96%
+  [##############################]  96%
+  [##############################]  96%
+  [##############################]  97%
+  [##############################]  97%
+  [##############################]  97%
+  [##############################]  97%
+  [##############################]  97%
+  [##############################]  97%
+  [##############################]  97%
+  [##############################]  97%
+  [##############################]  97%
+  [##############################]  97%
+  [##############################]  98%
+  [##############################]  98%
+  [##############################]  98%
+  [##############################]  98%
+  [##############################]  98%
+  [##############################]  98%
+  [##############################]  98%
+  [##############################]  98%
+  [##############################]  98%
+  [##############################]  99%
+  [##############################]  99%
+  [##############################]  99%
+  [##############################]  99%
+  [##############################]  99%
+  [##############################]  99%
+  [##############################]  99%
+  [##############################]  99%
+  [##############################]  99%
+  [##############################] 100%
+Post-install sanity check passed.
+
+Installation of the kernel module for the NVIDIA Accelerated Graphics Driver for Linux-x86_64 (version: 580.126.20) is now complete.
+
++ tree -L 2 /lib/modules/5.15.0-173-generic
+/lib/modules/5.15.0-173-generic
+|-- build -> /usr/src/linux-headers-5.15.0-173-generic
+|-- kernel
+|   |-- arch
+|   |-- crypto
+|   |-- drivers
+|   |-- fs
+|   |-- lib
+|   |-- net
+|   |-- sound
+|   |-- ubuntu
+|   |-- v4l2loopback
+|   `-- zfs
+|-- modules.alias
+|-- modules.alias.bin
+|-- modules.builtin
+|-- modules.builtin.alias.bin
+|-- modules.builtin.bin
+|-- modules.builtin.modinfo
+|-- modules.dep
+|-- modules.dep.bin
+|-- modules.devname
+|-- modules.order
+|-- modules.softdep
+|-- modules.symbols
+|-- modules.symbols.bin
+`-- proc
+    `-- version
+|   |-- 32
+|   |-- NVIDIA_Changelog
+|   |-- README.txt
+|   |-- _nvngx.dll
+|   |-- firmware
+|   |-- html
+|   |-- kernel-open
+
+13 directories, 14 files
 + _load_driver
 + echo 'Parsing kernel module parameters...'
 Parsing kernel module parameters...
 + _get_module_params
 + local base_path=/drivers
-Running post-install sanity check:: Checking
++ tree -L 2 /drivers
+/drivers
+|-- NVIDIA-Linux-x86_64-580.126.20
+|   |-- 10_nvidia.json
+|   |-- 10_nvidia_wayland.json
+|   |-- 15_nvidia_gbm.json
+|   |-- 20_nvidia_xcb.json
+|   |-- 20_nvidia_xlib.json
+|   |-- libEGL.so.1.1.0
+|   |-- libEGL.so.580.126.20
+|   |-- libEGL_nvidia.so.580.126.20
+|   |-- libGL.so.1.7.0
+|   |-- libGLESv1_CM.so.1.2.0
+|   |-- libGLESv1_CM_nvidia.so.580.126.20
+|   |-- libGLESv2.so.2.1.0
+|   |-- libGLESv2_nvidia.so.580.126.20
+|   |-- libGLX.so.0
+|   |-- libGLX_nvidia.so.580.126.20
+|   |-- libGLdispatch.so.0
+|   |-- libOpenCL.so.1.0.0
+|   |-- libOpenGL.so.0
+|   |-- libcuda.so.580.126.20
+|   |-- libcudadebugger.so.580.126.20
+|   |-- libglvnd_install_checker
+|   |-- libglxserver_nvidia.so.580.126.20
+|   |-- libnvcuvid.so.580.126.20
+|   |-- libnvidia-allocator.so.580.126.20
+|   |-- libnvidia-api.so.1
+|   |-- libnvidia-cfg.so.580.126.20
+|   |-- libnvidia-egl-gbm.so.1.1.3
+|   |-- libnvidia-egl-wayland.so.1.1.20
+|   |-- libnvidia-egl-xcb.so.1.0.4
+|   |-- libnvidia-egl-xlib.so.1.0.4
+|   |-- libnvidia-eglcore.so.580.126.20
+|   |-- libnvidia-encode.so.580.126.20
+|   |-- libnvidia-fbc.so.580.126.20
+|   |-- libnvidia-glcore.so.580.126.20
+|   |-- libnvidia-glsi.so.580.126.20
+|   |-- libnvidia-glvkspirv.so.580.126.20
+|   |-- libnvidia-gpucomp.so.580.126.20
+|   |-- libnvidia-gtk2.so.580.126.20
+|   |-- libnvidia-gtk3.so.580.126.20
+|   |-- libnvidia-ml.so.580.126.20
+|   |-- libnvidia-ngx.so.580.126.20
+|   |-- libnvidia-nvvm.so.580.126.20
+|   |-- libnvidia-nvvm70.so.4
+|   |-- libnvidia-opencl.so.580.126.20
+|   |-- libnvidia-opticalflow.so.580.126.20
+|   |-- libnvidia-pkcs11-openssl3.so.580.126.20
+|   |-- libnvidia-pkcs11.so.580.126.20
+|   |-- libnvidia-present.so.580.126.20
+|   |-- libnvidia-ptxjitcompiler.so.580.126.20
+|   |-- libnvidia-rtcore.so.580.126.20
+|   |-- libnvidia-sandboxutils.so.580.126.20
+|   |-- libnvidia-tls.so.580.126.20
+|   |-- libnvidia-vksc-core.so.580.126.20
+|   |-- libnvidia-wayland-client.so.580.126.20
+|   |-- libnvoptix.so.580.126.20
+|   |-- libvdpau_nvidia.so.580.126.20
+|   |-- makeself-help-script.sh
+|   |-- makeself.sh
+|   |-- nvidia-application-profiles-580.126.20-key-documentation
+|   |-- nvidia-application-profiles-580.126.20-rc
+|   |-- nvidia-bug-report.sh
+|   |-- nvidia-cuda-mps-control
+|   |-- nvidia-cuda-mps-control.1.gz
+|   |-- nvidia-cuda-mps-server
+|   |-- nvidia-dbus.conf
+|   |-- nvidia-debugdump
+|   |-- nvidia-drm-outputclass.conf
+|   |-- nvidia-installer
+|   |-- nvidia-installer.1.gz
+|   |-- nvidia-modprobe
+|   |-- nvidia-modprobe.1.gz
+|   |-- nvidia-ngx-updater
+|   |-- nvidia-pcc
+|   |-- nvidia-persistenced
+|   |-- nvidia-persistenced-init.tar.bz2
+|   |-- nvidia-persistenced.1.gz
+|   |-- nvidia-powerd
+|   |-- nvidia-settings
+|   |-- nvidia-settings.1.gz
+|   |-- nvidia-settings.desktop
+|   |-- nvidia-settings.png
+|   |-- nvidia-smi
+|   |-- nvidia-smi.1.gz
+|   |-- nvidia-xconfig
+|   |-- nvidia-xconfig.1.gz
+|   |-- nvidia.icd
+|   |-- nvidia_drv.so
+|   |-- nvidia_icd.json
+|   |-- nvidia_icd_vksc.json
+|   |-- nvidia_layers.json
+|   |-- nvngx.dll
+|   |-- nvngx_dlssg.dll
+|   |-- nvoptix.bin
+|   |-- pkg-history.txt
+|   |-- sandboxutils-filelist.json
+|   |-- supported-gpus
+|   `-- systemd
+|-- NVIDIA-Linux-x86_64-580.126.20.run
+|-- README.md
+`-- kernel
+    `-- pubkey.x509
 
-  [#####+ '[' -f /drivers/nvidia.conf ']'
+9 directories, 100 files
++ '[' -f /drivers/nvidia.conf ']'
 + '[' -f /drivers/nvidia-uvm.conf ']'
 + '[' -f /drivers/nvidia-modeset.conf ']'
 + '[' -f /drivers/nvidia-peermem.conf ']'
@@ -278,32 +6656,27 @@ Running post-install sanity check:: Checking
 + local set_fw_path=true
 + local fw_path_config_file=/sys/module/firmware_class/parameters/path
 + [[ true == \t\r\u\e ]]
-  [##############################] 100%
-Post-install sanity check passed.
 
-Installation of the kernel module for the NVIDIA Accelerated Graphics Driver for Linux-x86_64 (version: 580.126.20) is now complete.
 + echo 'Configuring the following firmware search path in '\''/sys/module/firmware_class/parameters/path'\'': /run/nvidia/driver/lib/firmware'
-++ grep '[^[:space:]]' /sys/module/firmware_class/parameters/path
-
-
 Configuring the following firmware search path in '/sys/module/firmware_class/parameters/path': /run/nvidia/driver/lib/firmware
+++ grep '[^[:space:]]' /sys/module/firmware_class/parameters/path
 + [[ ! -z '' ]]
 + echo -n /run/nvidia/driver/lib/firmware
-Loading ipmi and i2c_core kernel modules...
 + echo 'Loading ipmi and i2c_core kernel modules...'
+Loading ipmi and i2c_core kernel modules...
 + modprobe -a i2c_core ipmi_msghandler ipmi_devintf
 + echo 'Loading NVIDIA driver kernel modules...'
-+ set +o nounset
 Loading NVIDIA driver kernel modules...
++ set +o nounset
 + modprobe nvidia
 + modprobe nvidia-uvm
 + modprobe nvidia-modeset
 + set -o nounset
 + _gpu_direct_rdma_enabled
-Starting NVIDIA persistence daemon...
 + '[' false = true ']'
 + return 1
 + echo 'Starting NVIDIA persistence daemon...'
+Starting NVIDIA persistence daemon...
 + nvidia-persistenced --persistence-mode
 + '[' passthrough = vgpu ']'
 + _assert_nvswitch_system
@@ -314,8 +6687,8 @@ Starting NVIDIA persistence daemon...
 + return 0
 + _mount_rootfs
 + echo 'Mounting NVIDIA driver rootfs...'
-+ mount --make-runbindable /sys
 Mounting NVIDIA driver rootfs...
++ mount --make-runbindable /sys
 + mount --make-private /sys
 + mkdir -p /run/nvidia/driver
 + mount --rbind / /run/nvidia/driver
@@ -323,10 +6696,9 @@ Mounting NVIDIA driver rootfs...
 + '[' '!' -d /run/kernel/postinst.d ']'
 + return
 + echo 'Done, now waiting for signal'
-+ trap 'echo '\''Caught signal'\''; _shutdown && { kill 95919; exit 0; }' HUP INT QUIT PIPE TERM
-+ sleep infinity
+Done, now waiting for signal
++ trap 'echo '\''Caught signal'\''; _shutdown && { kill 71273; exit 0; }' HUP INT QUIT PIPE TERM
 + trap - EXIT
 + true
-+ wait 95919
-Done, now waiting for signal
-root@ubuntu-mass:~#
++ wait 71273
++ sleep infinity
