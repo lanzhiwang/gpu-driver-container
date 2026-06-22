@@ -112,6 +112,10 @@ USE_HOST_MOFED="${USE_HOST_MOFED:-false}"
 # USE_HOST_MOFED=false
 # 是否使用宿主机预装的 Mellanox OFED (网络驱动).
 
+# --- 4. 内核模块参数数组 ---
+# 定义四个空数组, 分别存储不同内核模块的加载参数.
+# 为什么要这么写: 使用数组而非字符串可以安全地处理带空格的参数.
+# 这些参数允许用户通过环境变量微调驱动行为(例如: 限制显存、开启特定调试模式).
 NVIDIA_MODULE_PARAMS=()
 # NVIDIA_MODULE_PARAMS=()
 # 核心模块 (nvidia.ko)
@@ -127,10 +131,6 @@ NVIDIA_MODESET_MODULE_PARAMS=()
 NVIDIA_PEERMEM_MODULE_PARAMS=()
 # NVIDIA_PEERMEM_MODULE_PARAMS=()
 # 用于 RDMA 的对等内存模块 (nvidia-peermem.ko)
-# --- 4. 内核模块参数数组 ---
-# 定义四个空数组, 分别存储不同内核模块的加载参数.
-# 为什么要这么写: 使用数组而非字符串可以安全地处理带空格的参数.
-# 这些参数允许用户通过环境变量微调驱动行为(例如: 限制显存、开启特定调试模式).
 
 TARGETARCH=${TARGETARCH:?"Missing TARGETARCH env"}
 # TARGETARCH=amd64
@@ -920,7 +920,7 @@ _load_driver() {
     # set -o xtrace +o nounset
     # set -o xtrace +o nounset
     # 仅临时关闭 nounset (即允许未定义变量/空数组), 保持 xtrace 的开启状态
-    set +o nounset  # 也可以写成 set +u
+    set +o nounset # 也可以写成 set +u
 
     # 基础驱动
     modprobe nvidia "${NVIDIA_MODULE_PARAMS[@]}"
@@ -937,7 +937,7 @@ _load_driver() {
     # set +o xtrace -o nounset
     # set +o xtrace -o nounset
     # 恢复 nounset
-    set -o nounset  # 也可以写成 set -u
+    set -o nounset # 也可以写成 set -u
 
     # --- 5. 加载 RDMA 支持模块 ---
     # 如果检测到 Mellanox 网卡并开启了 RDMA, 则加载 peermem 模块, 实现 GPU-to-Network 直连.
@@ -945,12 +945,12 @@ _load_driver() {
         echo "Loading NVIDIA Peer Memory kernel module..."
         # set -o xtrace +o nounset
         # 仅临时关闭 nounset (即允许未定义变量/空数组), 保持 xtrace 的开启状态
-        set +o nounset  # 也可以写成 set +u
+        set +o nounset # 也可以写成 set +u
 
         modprobe nvidia-peermem "${NVIDIA_PEERMEM_MODULE_PARAMS[@]}"
         # set +o xtrace -o nounset
         # 恢复 nounset
-        set -o nounset  # 也可以写成 set -u
+        set -o nounset # 也可以写成 set -u
 
     fi
 
@@ -1918,12 +1918,12 @@ if [ $# -eq 0 ]; then
     usage
 fi
 
-command=$1
-# command=init
-shift
 # --- 2. 提取子命令 ---
 # command 变量获取第一个参数(如 "init", "update").
 # shift 操作将参数左移, 即原先的 $2 变成 $1, 方便后续 getopt 解析剩余的选项.
+command=$1
+# command=init
+shift
 
 # --- 3. 针对不同子命令的参数预解析 (getopt) ---
 # 为什么要这么写: 不同的操作需要不同的开关. 这里使用 getopt 规范化长短参数.
